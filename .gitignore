@@ -1,0 +1,8 @@
+*
+!.gitignore
+!.nojekyll
+!README.md
+!index.html
+!style.css
+!app.js
+!config.js
