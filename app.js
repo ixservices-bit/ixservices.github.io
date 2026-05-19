@@ -152,7 +152,7 @@
       </section>
       <section class="grid three">
         ${panel("Top Forms", list(topForms, x => row(x.key, fmtDuration(x.value), `${x.count} row(s)`, "clickable", `data-form="${escAttr(x.key)}"`)))}
-        ${panel("Most Active Users", list(users, x => row(x.key, fmtDuration(x.value), `${userMachines(x.key).join(", ")}`, "clickable", `data-user="${escAttr(x.key)}"`)))}
+        ${panel("Most Active Users", list(users, x => row(x.key, fmtDuration(x.value), userSummary(x.key, rows), "clickable", `data-user="${escAttr(x.key)}"`)))}
         ${panel("Wallpaper Usage", list(wallpaper, x => row(x.key, x.value, "selection count")))}
       </section>
       <section class="grid two">
@@ -378,6 +378,17 @@
   function latestMachineRow(machine) { return state.rows.users.filter(u => eq(u.Machine, machine)).sort((a,b) => b.lastSeen - a.lastSeen)[0] || {}; }
   function machineMeta(machine) { return state.rows.machines.find(m => eq(m.Machine, machine)) || {}; }
   function userMachines(user) { return unique([...state.rows.users.filter(u => eq(u.Username, user)).map(u => u.Machine), ...state.rows.feature.filter(r => eq(r.Username, user)).map(r => r.Machine)]).filter(Boolean); }
+  function userSummary(user, rows) {
+    const userRows = rows.filter(r => eq(r.Username, user));
+    const forms = unique(userRows.map(r => r.FormName)).length;
+    const machines = userMachines(user).length;
+    const latest = maxDate(userRows, "date");
+    const parts = [];
+    parts.push(`${forms} form${forms === 1 ? "" : "s"}`);
+    if (machines) parts.push(`${machines} machine${machines === 1 ? "" : "s"}`);
+    if (latest instanceof Date && !Number.isNaN(latest.getTime())) parts.push(`last ${fmtDate(latest)}`);
+    return parts.join(" • ");
+  }
   function machineSeconds(machine) { return sum(formRows().filter(r => eq(r.Machine, machine)), r => r.seconds); }
   function groupMembers(group) { return state.rows.machines.filter(m => clean(m.Groups).split(/[|;,]/).map(x => x.trim()).some(x => eq(x, group))).map(m => m.Machine); }
   function recentRows(rows, n) { return rows.slice().sort((a,b) => b.date - a.date).slice(0, n); }
