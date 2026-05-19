@@ -1,1 +1,33 @@
-Title,Url,BuildVisibility
+Activity Manager,http://activitymanager.dc{DC}.homedepot.com/,RDC
+Allocation Tool,https://rdc-allocation-ui.apps.homedepot.com/,RDC
+Distro Redrop,https://distroredrop.apps.homedepot.com/,
+Floor Manager,https://webapps.homedepot.com/MYTHDPassport/loginthd.html?fed=false&callingProgram=TRN&successUrl=https://webapps.homedepot.com/FloorManager,
+HHMA,https://hhma.apps.homedepot.com/,RDC
+Home,https://home-customeraccount.apps.homedepot.com,
+iBOT,https://ibot.apps.homedepot.com,RDC
+Incident Portal,https://hdw-incident-portal.onewms.homedepot.com/rdc,RDC
+InFocus,https://www.myinfocus.com/default.aspx,RDC
+Infodock,https://infodock.apps.homedepot.com/email,
+LORP,https://lorpui.apps.homedepot.com/Home.html,RDC
+myApron,https://preauthen-us.azurewebsites.net,RDC
+myFreight,https://webapps.homedepot.com/StoreAppLauncher?appPath=StoreInventory&port=12030,
+Optimus,https://optimus.apps.homedepot.com,RDC
+Order Up,https://orders.apps.homedepot.com,
+Partner Profile,https://supplierhub.homedepot.com/,
+ROPE,https://rope.apps.homedepot.com,RDC
+RRF Report,https://tableau-scm.homedepot.com/#/workbooks/9632/views,
+RSA SSP,https://ssp.homedepot.com/,
+Smart Access,https://app.smartaccess.io/,RDC
+Tableau,https://tableau-scm.homedepot.com/,RDC
+THD Access,https://mythdaccess.homedepot.com,
+TMS,https://tms14tpe.homedepot.com/,
+Toolbox,https://rdc-toolbox.apps.homedepot.com,RDC
+TREX,https://transportation.homedepot.com/trex/,
+Vector,https://app.withvector.com/activity,
+WMS,https://rdc{DC}wms.homedepot.com:30001,RDC
+WorkBench,https://workbench.homedepot.com/,
+Workday,wd5.myworkday.com/homedepot/d/home.htmld,RDC
+Zendesk,https://depotsupport.zendesk.com/hc/en-us/articles/360041288092-RDC-VOC-Forms,
+ICQA Reports,https://tableau-scm.homedepot.com/#/views/ICQAReportingSuite/RDCICQAReports?:iid=2,
+Home Depot,homedepot.com,RDC
+DC SOPs,https://portal.homedepot.com/sites/DCSOPs/SitePages/DC-SOPs-SharePoint-Site.aspx,RDC
