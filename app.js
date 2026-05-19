@@ -66,7 +66,7 @@
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), config.fetchTimeoutMs || 12000);
     try {
-      const res = await fetch(`${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`, { cache: "no-store", signal: controller.signal });
+      const res = await fetch(url, { cache: "no-store", signal: controller.signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return await res.text();
     } finally {
