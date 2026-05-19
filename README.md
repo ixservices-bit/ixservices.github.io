@@ -7,21 +7,27 @@ This is a static, mobile-first dashboard for the ICQA Resources admin data.
 - `HTML`
 - `CSS`
 - `JavaScript`
-- Live CSV files from GitHub raw links
+- CSV files served by GitHub Pages from the `data/` folder
+- GitHub Actions sync from private source repos
 
 ## Data sources
 
-The dashboard reads directly from the same GitHub-hosted CSV and version files used by the VB.NET app:
+The dashboard reads local static files from the `data/` folder:
 
 - `FeatureUsage.csv`
 - `UserUsage.csv`
-- `usersettings/customization_usage.csv`
+- `customization_usage.csv`
 - `quicklinks.csv`
 - `feedback.csv`
 - `managers.csv`
 - `ActiveUsers.csv`
 - `icqa_version.txt`
 - `rdc_version.txt`
+
+The `.github/workflows/sync-dashboard-data.yml` workflow refreshes those files from:
+
+- `ixservices-bit/data`
+- `ixservices-bit/update`
 
 ## Behavior
 
@@ -34,9 +40,20 @@ The dashboard reads directly from the same GitHub-hosted CSV and version files u
 - No database
 - No JSON data files
 
+## Private Data Sync
+
+Create a repository secret named `ICQA_DATA_SYNC_TOKEN` in the `ixservices-bit/ixservices.github.io` repo.
+
+The token needs read access to:
+
+- `ixservices-bit/data`
+- `ixservices-bit/update`
+
+After the secret exists, run `Actions` > `Sync dashboard data` > `Run workflow`. The workflow also runs every 30 minutes.
+
 ## Notes
 
-- Open `index.html` in a browser that can reach GitHub raw URLs.
+- Open `index.html` in a browser that can reach GitHub Pages.
 - The dashboard only reads data. It does not write back to GitHub or modify the VB.NET app.
 
 ## GitHub Pages

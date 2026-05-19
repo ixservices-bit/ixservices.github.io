@@ -6,3 +6,16 @@
 !style.css
 !app.js
 !config.js
+!.github/
+!.github/workflows/
+!.github/workflows/sync-dashboard-data.yml
+!data/
+!data/FeatureUsage.csv
+!data/UserUsage.csv
+!data/customization_usage.csv
+!data/quicklinks.csv
+!data/feedback.csv
+!data/managers.csv
+!data/ActiveUsers.csv
+!data/icqa_version.txt
+!data/rdc_version.txt

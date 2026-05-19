@@ -1,0 +1,81 @@
+name: Sync dashboard data
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/30 * * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Pages repo
+        uses: actions/checkout@v4
+
+      - name: Download private dashboard data
+        env:
+          GH_TOKEN: ${{ secrets.ICQA_DATA_SYNC_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${GH_TOKEN}" ]; then
+            echo "Missing ICQA_DATA_SYNC_TOKEN repository secret."
+            exit 1
+          fi
+
+          mkdir -p data
+
+          download() {
+            local repo="$1"
+            local path="$2"
+            local output="$3"
+            local url="https://api.github.com/repos/ixservices-bit/${repo}/contents/${path}?ref=main"
+
+            status=$(curl -L -sS \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github.raw" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              -o "${output}.tmp" \
+              -w "%{http_code}" \
+              "${url}")
+
+            if [ "${status}" = "200" ]; then
+              mv "${output}.tmp" "${output}"
+              echo "Synced ${repo}/${path} -> ${output}"
+            elif [ "${status}" = "404" ]; then
+              rm -f "${output}.tmp"
+              echo "Missing optional source ${repo}/${path}; keeping existing ${output}"
+            else
+              rm -f "${output}.tmp"
+              echo "Failed ${repo}/${path} with HTTP ${status}"
+              exit 1
+            fi
+          }
+
+          download data FeatureUsage.csv data/FeatureUsage.csv
+          download data UserUsage.csv data/UserUsage.csv
+          download data usersettings/customization_usage.csv data/customization_usage.csv
+          download data quicklinks.csv data/quicklinks.csv
+          download data feedback.csv data/feedback.csv
+          download data managers.csv data/managers.csv
+          download data ActiveUsers.csv data/ActiveUsers.csv
+          download update icqa_version.txt data/icqa_version.txt
+          download update rdc_version.txt data/rdc_version.txt
+
+      - name: Commit synced data
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data
+
+          if git diff --cached --quiet; then
+            echo "No dashboard data changes."
+            exit 0
+          fi
+
+          git commit -m "Sync dashboard CSV data"
+          git push
