@@ -3,84 +3,50 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#08101b">
+  <meta name="theme-color" content="#0b0f14">
   <title>ICQA Resources Admin Panel</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="bg-orb bg-orb-one"></div>
-  <div class="bg-orb bg-orb-two"></div>
-  <main class="shell">
-    <section class="hero card">
-      <div class="hero-copy">
+  <main class="app-shell">
+    <header class="topbar">
+      <div>
         <p class="eyebrow">ICQA Resources</p>
-        <h1>Admin Panel Dashboard</h1>
-        <p class="subcopy">Live CSV-backed overview of usage, users, feedback, wallpapers, and build status.</p>
+        <h1>Admin Panel</h1>
       </div>
-      <div class="hero-actions">
-        <button id="refreshBtn" class="btn btn-primary" type="button">Refresh</button>
-        <div id="statusPill" class="status-pill">Idle</div>
+      <button id="refreshBtn" class="command" type="button">Refresh</button>
+    </header>
+
+    <section class="controls">
+      <div class="segmented" id="rangeTabs" aria-label="Date range">
+        <button data-range="7" class="active" type="button">7d</button>
+        <button data-range="30" type="button">30d</button>
+        <button data-range="60" type="button">60d</button>
+        <button data-range="90" type="button">90d</button>
+        <button data-range="all" type="button">All</button>
       </div>
+      <select id="buildFilter" aria-label="Build filter">
+        <option>All Builds</option>
+        <option>ICQA</option>
+        <option>RDC</option>
+      </select>
+      <input id="searchBox" type="search" placeholder="Search users, machines, forms">
     </section>
 
-    <section class="grid grid-kpis" id="kpiGrid" aria-live="polite"></section>
+    <nav class="tabs" id="viewTabs" aria-label="Admin views">
+      <button data-view="overview" class="active" type="button">Overview</button>
+      <button data-view="analytics" type="button">Analytics</button>
+      <button data-view="users" type="button">Users</button>
+      <button data-view="forms" type="button">Forms</button>
+      <button data-view="machines" type="button">Machines</button>
+      <button data-view="groups" type="button">Groups</button>
+      <button data-view="quicklinks" type="button">Quick Links</button>
+      <button data-view="feedback" type="button">Feedback</button>
+      <button data-view="versions" type="button">Versions</button>
+    </nav>
 
-    <section class="grid grid-primary">
-      <article class="card panel">
-        <div class="panel-head">
-          <div>
-            <p class="panel-kicker">Usage</p>
-            <h2>Total minutes and build mix</h2>
-          </div>
-        </div>
-        <div id="usageSummary" class="summary-stack"></div>
-      </article>
-
-      <article class="card panel">
-        <div class="panel-head">
-          <div>
-            <p class="panel-kicker">Users</p>
-            <h2>Active and recent</h2>
-          </div>
-        </div>
-        <div id="userSummary" class="summary-stack"></div>
-      </article>
-    </section>
-
-    <section class="grid grid-lists">
-      <article class="card panel">
-        <div class="panel-head"><h2>Top used forms</h2></div>
-        <div id="topForms" class="list-shell"></div>
-      </article>
-      <article class="card panel">
-        <div class="panel-head"><h2>Least used forms</h2></div>
-        <div id="leastForms" class="list-shell"></div>
-      </article>
-      <article class="card panel">
-        <div class="panel-head"><h2>Wallpaper usage</h2></div>
-        <div id="wallpaperUsage" class="list-shell"></div>
-      </article>
-    </section>
-
-    <section class="grid grid-primary">
-      <article class="card panel">
-        <div class="panel-head"><h2>Feedback and messages</h2></div>
-        <div id="feedbackPanel" class="list-shell"></div>
-      </article>
-      <article class="card panel">
-        <div class="panel-head"><h2>Version and build</h2></div>
-        <div id="versionPanel" class="summary-stack"></div>
-      </article>
-    </section>
-
-    <footer class="footer">
-      <span id="lastUpdated">Not loaded yet</span>
-      <span class="footer-dot">•</span>
-      <span>CSV only, no backend</span>
-    </footer>
+    <section id="statusLine" class="status-line">Loading data...</section>
+    <section id="content" class="content" aria-live="polite"></section>
   </main>
 
   <script src="config.js"></script>

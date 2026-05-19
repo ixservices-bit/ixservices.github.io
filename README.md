@@ -51,13 +51,16 @@ Required:
 Optional, but recommended if the update repo uses a separate token:
 
 - `ICQA_UPDATE_SYNC_TOKEN`: token with read access to `ixservices-bit/update`
+- `ICQA_CUSTOMIZE_SYNC_TOKEN`: token with read access to `ixservices-bit/customize`
 
 If `ICQA_UPDATE_SYNC_TOKEN` is missing, the workflow tries `ICQA_DATA_SYNC_TOKEN` for both repos.
+If `ICQA_CUSTOMIZE_SYNC_TOKEN` is missing, the workflow tries `ICQA_DATA_SYNC_TOKEN` for wallpaper usage.
 
 The workflow reads:
 
 - `ixservices-bit/data`
 - `ixservices-bit/update`
+- `ixservices-bit/customize`
 
 After the secret exists, run `Actions` > `Sync dashboard data` > `Run workflow`. The workflow also runs every 30 minutes.
 

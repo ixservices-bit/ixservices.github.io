@@ -22,6 +22,7 @@ jobs:
         env:
           DATA_TOKEN: ${{ secrets.ICQA_DATA_SYNC_TOKEN }}
           UPDATE_TOKEN: ${{ secrets.ICQA_UPDATE_SYNC_TOKEN }}
+          CUSTOMIZE_TOKEN: ${{ secrets.ICQA_CUSTOMIZE_SYNC_TOKEN }}
         run: |
           set -euo pipefail
 
@@ -32,6 +33,10 @@ jobs:
 
           if [ -z "${UPDATE_TOKEN}" ]; then
             UPDATE_TOKEN="${DATA_TOKEN}"
+          fi
+
+          if [ -z "${CUSTOMIZE_TOKEN}" ]; then
+            CUSTOMIZE_TOKEN="${DATA_TOKEN}"
           fi
 
           mkdir -p data
@@ -68,11 +73,15 @@ jobs:
           download data UserUsage.csv data/UserUsage.csv "${DATA_TOKEN}"
           download data usersettings/customization_usage.csv data/customization_usage.csv "${DATA_TOKEN}"
           download data quicklinks.csv data/quicklinks.csv "${DATA_TOKEN}"
+          download data QuickLinkUsage.csv data/QuickLinkUsage.csv "${DATA_TOKEN}"
           download data feedback.csv data/feedback.csv "${DATA_TOKEN}"
           download data managers.csv data/managers.csv "${DATA_TOKEN}"
+          download data machines.csv data/machines.csv "${DATA_TOKEN}"
+          download data groups.csv data/groups.csv "${DATA_TOKEN}"
           download data ActiveUsers.csv data/ActiveUsers.csv "${DATA_TOKEN}"
           download update icqa_version.txt data/icqa_version.txt "${UPDATE_TOKEN}"
           download update rdc_version.txt data/rdc_version.txt "${UPDATE_TOKEN}"
+          download customize usersettings/customization_usage.csv data/customization_usage.csv "${CUSTOMIZE_TOKEN}"
 
       - name: Commit synced data
         run: |

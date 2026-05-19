@@ -1,199 +1,429 @@
 (function () {
   const config = window.ICQA_CONFIG || {};
   const sources = config.sources || {};
-  const timeoutMs = config.fetchTimeoutMs || 12000;
-  const recentWindowDays = config.recentWindowDays || 7;
-
-  const els = {
-    refreshBtn: document.getElementById("refreshBtn"),
-    statusPill: document.getElementById("statusPill"),
-    lastUpdated: document.getElementById("lastUpdated"),
-    kpiGrid: document.getElementById("kpiGrid"),
-    usageSummary: document.getElementById("usageSummary"),
-    userSummary: document.getElementById("userSummary"),
-    topForms: document.getElementById("topForms"),
-    leastForms: document.getElementById("leastForms"),
-    wallpaperUsage: document.getElementById("wallpaperUsage"),
-    feedbackPanel: document.getElementById("feedbackPanel"),
-    versionPanel: document.getElementById("versionPanel")
+  const state = {
+    raw: {},
+    rows: {},
+    range: "7",
+    build: "All Builds",
+    search: "",
+    view: "overview",
+    selectedUser: "",
+    selectedForm: "",
+    selectedMachine: "",
+    selectedFeedback: ""
   };
 
-  const csvHeaders = (text) => parseCsv(text)[0] || [];
+  const el = {
+    refresh: document.getElementById("refreshBtn"),
+    status: document.getElementById("statusLine"),
+    content: document.getElementById("content"),
+    ranges: document.getElementById("rangeTabs"),
+    tabs: document.getElementById("viewTabs"),
+    build: document.getElementById("buildFilter"),
+    search: document.getElementById("searchBox")
+  };
+
   function parseCsv(text) {
     const rows = [];
     let row = [], cell = "", quoted = false;
-    text = (text || "").replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+    text = String(text || "").replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
     for (let i = 0; i < text.length; i++) {
       const ch = text[i], next = text[i + 1];
-      if (ch === '"') { if (quoted && next === '"') { cell += '"'; i++; } else quoted = !quoted; continue; }
-      if (ch === "," && !quoted) { row.push(cell); cell = ""; continue; }
-      if (ch === "\n" && !quoted) { row.push(cell); rows.push(row); row = []; cell = ""; continue; }
-      cell += ch;
+      if (ch === "\"") {
+        if (quoted && next === "\"") { cell += "\""; i++; } else quoted = !quoted;
+      } else if (ch === "," && !quoted) {
+        row.push(cell.trim()); cell = "";
+      } else if (ch === "\n" && !quoted) {
+        row.push(cell.trim()); rows.push(row); row = []; cell = "";
+      } else {
+        cell += ch;
+      }
     }
-    if (cell.length || row.length) { row.push(cell); rows.push(row); }
-    return rows.map(r => r.map(c => c.trim()));
+    if (cell.length || row.length) { row.push(cell.trim()); rows.push(row); }
+    return rows.filter(r => r.some(c => c !== ""));
   }
 
-  function num(v) { const n = Number(String(v || "").replace(/[^0-9.-]/g, "")); return Number.isFinite(n) ? n : 0; }
-  function clean(v) { return String(v || "").trim(); }
-  function minutesFromSeconds(s) { return Math.round(Math.max(0, s) / 60); }
-  function fmtMinutes(m) { if (!m) return "0m"; if (m >= 60) return `${Math.floor(m / 60)}h ${m % 60}m`; return `${m}m`; }
-  function fmtDate(v) { const d = new Date(v); return Number.isNaN(d.getTime()) ? clean(v) : d.toLocaleString(); }
-  function daysAgo(n) { return new Date(Date.now() - n * 86400000); }
+  function toObjects(text, fallbackHeaders) {
+    const rows = parseCsv(text);
+    const headers = (rows.shift() || fallbackHeaders || []).map(h => h.replace(/^\uFEFF/, "").trim());
+    return rows.map(r => {
+      const o = {};
+      headers.forEach((h, i) => { o[h] = r[i] || ""; });
+      return o;
+    });
+  }
 
   async function fetchText(url) {
     const controller = new AbortController();
-    const t = setTimeout(() => controller.abort(), timeoutMs);
+    const timer = setTimeout(() => controller.abort(), config.fetchTimeoutMs || 12000);
     try {
-      const res = await fetch(url, { signal: controller.signal, cache: "no-store" });
+      const res = await fetch(`${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`, { cache: "no-store", signal: controller.signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return await res.text();
-    } finally { clearTimeout(t); }
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
-  function renderLoading() {
-    els.statusPill.textContent = "Loading";
-    document.body.classList.add("is-loading");
-    const skeleton = '<div class="skeleton"></div>';
-    els.kpiGrid.innerHTML = skeleton.repeat(4);
-    els.usageSummary.innerHTML = skeleton.repeat(2);
-    els.userSummary.innerHTML = skeleton.repeat(2);
-    els.topForms.innerHTML = skeleton.repeat(4);
-    els.leastForms.innerHTML = skeleton.repeat(4);
-    els.wallpaperUsage.innerHTML = skeleton.repeat(4);
-    els.feedbackPanel.innerHTML = skeleton.repeat(3);
-    els.versionPanel.innerHTML = skeleton.repeat(2);
-  }
-
-  function metricCard(label, value, hint) {
-    return `<div class="metric"><div class="label">${label}</div><div class="value">${value}</div><div class="hint">${hint || ""}</div></div>`;
-  }
-
-  function listItem(title, value, sub, badge) {
-    return `<div class="row-item"><div><div class="badge ${badge || ""}">${badge || ""}</div><div class="row-title">${title}</div><div class="row-sub">${sub || ""}</div></div><div class="row-value">${value}</div></div>`;
-  }
-
-  function emptyState(msg) { return `<div class="empty-state">${msg}</div>`; }
-
-  async function loadDashboard() {
-    renderLoading();
-    const start = Date.now();
-    const results = await Promise.allSettled(Object.entries(sources).map(async ([key, url]) => [key, await fetchText(url)]));
-    const data = {};
+  async function load() {
+    el.status.textContent = "Loading data...";
+    el.content.innerHTML = `<div class="empty loading">Loading dashboard data...</div>`;
+    const entries = Object.entries(sources);
+    const settled = await Promise.allSettled(entries.map(async ([k, url]) => [k, await fetchText(url)]));
     const errors = [];
-    for (const r of results) {
-      if (r.status === "fulfilled") { const [k, v] = r.value; data[k] = v; }
-      else errors.push(r.reason?.message || "Fetch failed");
-    }
-    const featureRows = parseCsv(data.featureUsage || "");
-    const userRows = parseCsv(data.userUsage || "");
-    const wallpaperRows = parseCsv(data.wallpaperUsage || "");
-    const feedbackRows = parseCsv(data.feedback || "");
-    const managersRows = parseCsv(data.managers || "");
-    const activeRows = parseCsv(data.activeUsers || "");
-    const quickLinkRows = parseCsv(data.quickLinks || "");
+    settled.forEach((result, index) => {
+      const key = entries[index][0];
+      if (result.status === "fulfilled") state.raw[key] = result.value[1];
+      else errors.push(`${key}: ${result.reason.message || "failed"}`);
+    });
+    hydrateRows();
+    el.status.textContent = `${counts().feature} feature rows, ${counts().users} users, ${counts().feedback} feedback items loaded${errors.length ? `; ${errors.length} source issue(s)` : ""}.`;
+    render();
+  }
 
-    const featureHeader = csvHeaders(data.featureUsage || "");
-    const userHeader = csvHeaders(data.userUsage || "");
-    const wallpaperHeader = csvHeaders(data.wallpaperUsage || "");
-    const feedbackHeader = csvHeaders(data.feedback || "");
-    const quickHeader = csvHeaders(data.quickLinks || "");
-
-    const feature = featureRows.slice(1).map(r => rowMap(featureHeader, r));
-    const users = userRows.slice(1).map(r => rowMap(userHeader, r));
-    const wallpaper = wallpaperRows.slice(1).map(r => rowMap(wallpaperHeader, r));
-    const feedback = feedbackRows.slice(1).map(r => rowMap(feedbackHeader, r));
-    const quick = quickLinkRows.slice(1).map(r => rowMap(quickHeader, r));
-    const active = activeRows.slice(1).map(r => rowMap(["Username","Machine","Build","Status","LastHeartbeat","AssemblyVersion"], r));
-    const managers = managersRows.slice(1).map(r => r.map(clean));
-
-    const usageRows = feature.filter(r => clean(r.FormName)).filter(r => !clean(r.ButtonName));
-    const totalSeconds = usageRows.reduce((sum, r) => sum + num(r.ActiveSeconds), 0);
-    const icqaSeconds = usageRows.filter(r => /ICQA/i.test(clean(r.Build))).reduce((sum, r) => sum + num(r.ActiveSeconds), 0);
-    const rdcSeconds = usageRows.filter(r => /RDC/i.test(clean(r.Build))).reduce((sum, r) => sum + num(r.ActiveSeconds), 0);
-    const byForm = aggregate(usageRows, r => clean(r.FormName), r => num(r.ActiveSeconds)).sort((a,b)=>b.value-a.value);
-    const recentCutoff = daysAgo(recentWindowDays);
-    const activeUsers = dedupeCount(usageRows.filter(r => new Date(r.Timestamp || r.SubmittedAt || 0) >= recentCutoff), r => `${clean(r.Username)}|${clean(r.Machine)}`);
-    const recentUsers = usageRows.slice().sort((a,b)=>new Date(b.Timestamp||0)-new Date(a.Timestamp||0)).slice(0, 8);
-    const wallpaperAgg = aggregate(wallpaper, r => clean(r[wallpaperHeader[0]] || r.Title || r.Name || "Wallpaper"), r => 1).sort((a,b)=>b.value-a.value);
-    const feedbackSorted = feedback.slice().sort((a,b)=>(new Date(b.SubmittedAt||0)-new Date(a.SubmittedAt||0))).slice(0, 5);
-    const latestIcqa = clean(data.icqaVersion);
-    const latestRdc = clean(data.rdcVersion);
-    const appVersion = latestIcqa || latestRdc || "";
-
-    els.kpiGrid.innerHTML = [
-      metricCard("Total usage", fmtMinutes(minutesFromSeconds(totalSeconds)), "All tracked form time"),
-      metricCard("ICQA usage", fmtMinutes(minutesFromSeconds(icqaSeconds)), `${pct(icqaSeconds, totalSeconds)} of tracked time`),
-      metricCard("RDC usage", fmtMinutes(minutesFromSeconds(rdcSeconds)), `${pct(rdcSeconds, totalSeconds)} of tracked time`),
-      metricCard("Active users", String(activeUsers), `Last ${recentWindowDays} days`)
-    ].join("");
-
-    els.usageSummary.innerHTML = [
-      listItem("Tracked forms", byForm.length.toString(), "Form rows with active time", "good"),
-      listItem("Quick links", quick.length.toString(), "Links loaded from CSV", quick.length ? "good" : "warn")
-    ].join("");
-
-    els.userSummary.innerHTML = [
-      listItem("Current usage rows", users.length.toString(), "UserUsage.csv records", users.length ? "good" : "warn"),
-      listItem("Recent activity", recentUsers.length.toString(), "Most recent tracked sessions", recentUsers.length ? "good" : "warn")
-    ].join("");
-
-    els.topForms.innerHTML = byForm.length ? byForm.slice(0, 5).map(x => listItem(x.key, fmtMinutes(minutesFromSeconds(x.value)), "Most active forms", "good")).join("") : emptyState("No feature usage rows were available.");
-    els.leastForms.innerHTML = byForm.length ? byForm.slice(-5).reverse().map(x => listItem(x.key, fmtMinutes(minutesFromSeconds(x.value)), "Lowest tracked forms", "warn")).join("") : emptyState("No feature usage rows were available.");
-    els.wallpaperUsage.innerHTML = wallpaperAgg.length ? wallpaperAgg.slice(0, 5).map(x => listItem(x.key, String(x.value), "Wallpaper selections", "good")).join("") : emptyState("No wallpaper usage file was available.");
-
-    els.feedbackPanel.innerHTML = feedbackSorted.length ? feedbackSorted.map(x => {
-      const message = clean(x.Message || x.message).slice(0, 140);
-      return `<div class="row-item"><div><div class="badge ${statusBadge(x.Status)}">${clean(x.Status || "New")}</div><div class="row-title">${clean(x.DisplayName || x.displayName || "Anonymous")}</div><div class="row-sub">${clean(x.Category || x.category || "")} ${message ? "• " + message : ""}</div></div><div class="row-value">${fmtDate(x.SubmittedAt || x.submittedAt || "")}</div></div>`;
-    }).join("") : emptyState("No feedback file was available.");
-
-    const buildStatus = [
-      { label: "ICQA version", value: latestIcqa || "Missing", hint: latestIcqa ? "Raw txt loaded from GitHub" : "Version file missing", badge: latestIcqa ? "good" : "warn" },
-      { label: "RDC version", value: latestRdc || "Missing", hint: latestRdc ? "Raw txt loaded from GitHub" : "Version file missing", badge: latestRdc ? "good" : "warn" },
-      { label: "Managers file", value: managers.length.toString(), hint: "Rows found in managers.csv", badge: managers.length ? "good" : "warn" }
+  function hydrateRows() {
+    state.rows.feature = toObjects(state.raw.featureUsage, ["Timestamp","SessionId","Username","Machine","Build","FormName","ButtonName","OpenCount","ClickCount","ActiveSeconds"]).map(r => ({
+      ...r,
+      date: dateValue(r.Timestamp),
+      seconds: number(r.ActiveSeconds),
+      opens: number(r.OpenCount),
+      clicks: number(r.ClickCount)
+    }));
+    state.rows.users = toObjects(state.raw.userUsage, ["Username","Machine","Build","Status","LastHeartbeat","AssemblyVersion"]).map(r => ({ ...r, lastSeen: dateValue(r.LastHeartbeat) }));
+    state.rows.wallpaper = toObjects(state.raw.wallpaperUsage, ["Timestamp","Username","Machine","Build","Wallpaper"]).map(r => ({ ...r, date: dateValue(r.Timestamp), name: first(r.Wallpaper, r.Theme, r.Name, r.Selection, r.Value) || lastValue(r) }));
+    state.rows.quickLinks = toObjects(state.raw.quickLinks, ["Title","Url","BuildVisibility"]);
+    state.rows.quickLinkUsage = toObjects(state.raw.quickLinkUsage, ["LinkName","ClickCount","LastClicked"]).map(r => ({ ...r, clicks: number(r.ClickCount), date: dateValue(r.LastClicked) }));
+    state.rows.feedback = toObjects(state.raw.feedback, ["Id","SubmittedAt","DisplayName","Email","Category","Message","Username","Machine","Build","Status","StatusUpdatedAt","StatusUpdatedBy"]).map(r => ({ ...r, date: dateValue(r.SubmittedAt) }));
+    state.rows.managers = toObjects(state.raw.managers, ["Username","AccountType"]);
+    state.rows.machines = toObjects(state.raw.machines, ["Machine","Nickname","Groups","Notes"]);
+    state.rows.groups = toObjects(state.raw.groups, ["GroupName","Description"]);
+    state.rows.activeUsers = toObjects(state.raw.activeUsers, ["Username","Machine","Build","Status","LastHeartbeat","AssemblyVersion"]).map(r => ({ ...r, lastSeen: dateValue(r.LastHeartbeat) }));
+    state.rows.versions = [
+      { build: "ICQA", version: clean(state.raw.icqaVersion) },
+      { build: "RDC", version: clean(state.raw.rdcVersion) }
     ];
-    els.versionPanel.innerHTML = buildStatus.map(x => listItem(x.label, x.value, x.hint, x.badge)).join("") + (appVersion ? `<div class="meta-line">Latest available version text: ${appVersion}</div>` : "");
-
-    const elapsed = ((Date.now() - start) / 1000).toFixed(1);
-    els.statusPill.textContent = errors.length ? `Loaded with ${errors.length} issue(s)` : `Updated in ${elapsed}s`;
-    els.statusPill.className = `status-pill ${errors.length ? "warn" : "good"}`;
-    els.lastUpdated.textContent = `Last updated ${new Date().toLocaleTimeString()}${errors.length ? ` • ${errors.length} fetch issue(s)` : ""}`;
-    document.body.classList.remove("is-loading");
-    if (errors.length) {
-      const msg = errors.slice(0, 2).join(" | ");
-      els.userSummary.insertAdjacentHTML("afterbegin", `<div class="empty-state">Some CSV files could not be loaded: ${escapeHtml(msg)}</div>`);
-    }
   }
 
-  function rowMap(headers, row) {
-    const out = {};
-    for (let i = 0; i < headers.length; i++) out[headers[i]] = row[i] ?? "";
-    return out;
+  function filteredFeature() {
+    const max = maxDate(state.rows.feature, "date");
+    return state.rows.feature.filter(r => {
+      if (!matchBuild(r.Build)) return false;
+      if (!inRange(r.date, max)) return false;
+      return matchesSearch([r.Username, r.Machine, r.Build, r.FormName, r.ButtonName]);
+    });
   }
+
+  function formRows(rows = filteredFeature()) {
+    return rows.filter(r => clean(r.FormName) && !clean(r.ButtonName));
+  }
+
+  function render() {
+    setActiveButtons();
+    const views = {
+      overview: renderOverview,
+      analytics: renderAnalytics,
+      users: renderUsers,
+      forms: renderForms,
+      machines: renderMachines,
+      groups: renderGroups,
+      quicklinks: renderQuickLinks,
+      feedback: renderFeedback,
+      versions: renderVersions
+    };
+    (views[state.view] || renderOverview)();
+  }
+
+  function renderOverview() {
+    const rows = formRows();
+    const total = sum(rows, r => r.seconds);
+    const icqa = sum(rows.filter(r => /icqa/i.test(r.Build)), r => r.seconds);
+    const rdc = sum(rows.filter(r => /rdc/i.test(r.Build)), r => r.seconds);
+    const active = state.rows.users.filter(u => /active/i.test(u.Status)).length;
+    const topForms = aggregate(rows, r => r.FormName, r => r.seconds).slice(0, 8);
+    const users = aggregate(rows, r => r.Username, r => r.seconds).slice(0, 8);
+    const wallpaper = wallpaperRows().slice(0, 8);
+    el.content.innerHTML = `
+      <section class="grid four">
+        ${metric("Total usage", fmtDuration(total), `${rows.length} form usage rows`)}
+        ${metric("ICQA usage", fmtDuration(icqa), pct(icqa, total))}
+        ${metric("RDC usage", fmtDuration(rdc), pct(rdc, total))}
+        ${metric("Active machines", active, `${state.rows.users.length} tracked user rows`)}
+      </section>
+      <section class="grid three">
+        ${panel("Top Forms", list(topForms, x => row(x.key, fmtDuration(x.value), `${x.count} row(s)`, "clickable", `data-form="${escAttr(x.key)}"`)))}
+        ${panel("Most Active Users", list(users, x => row(x.key, fmtDuration(x.value), `${userMachines(x.key).join(", ")}`, "clickable", `data-user="${escAttr(x.key)}"`)))}
+        ${panel("Wallpaper Usage", list(wallpaper, x => row(x.key, x.value, "selection count")))}
+      </section>
+      <section class="grid two">
+        ${panel("Recent Activity", list(recentRows(rows, 12), x => row(x.FormName, fmtDuration(x.seconds), `${x.Username} • ${x.Machine} • ${fmtDate(x.date)}`)))}
+        ${panel("Health", healthList())}
+      </section>`;
+    wireClicks();
+  }
+
+  function renderAnalytics() {
+    const rows = formRows();
+    const totalSessions = unique(rows.map(r => r.SessionId)).length;
+    const avg = rows.length ? sum(rows, r => r.seconds) / rows.length : 0;
+    const daily = aggregateBy(rows, r => dayKey(r.date), r => uniqueValue(r.Username, r.Machine)).slice(-14);
+    const byDay = aggregate(rows, r => dayName(r.date), r => r.seconds);
+    const avgByForm = aggregateAvg(rows, r => r.FormName, r => r.seconds).slice(0, 12);
+    el.content.innerHTML = `
+      <section class="grid four">
+        ${metric("Sessions", totalSessions, "Distinct session ids")}
+        ${metric("Average form time", fmtDuration(avg), "Average active time per form row")}
+        ${metric("Outdated rows", outdatedUsers().length, "Version mismatch")}
+        ${metric("Feedback open", openFeedback().length, "New or active feedback")}
+      </section>
+      <section class="grid two">
+        ${panel("Daily Active Users", list(daily, x => barRow(x.key, x.value, maxOf(daily))))}
+        ${panel("Busiest Days", list(byDay, x => barRow(x.key, fmtDuration(x.value), maxOf(byDay), x.value)))}
+        ${panel("Average Time By Form", list(avgByForm, x => barRow(x.key, fmtDuration(x.value), maxOf(avgByForm), x.value, `data-form="${escAttr(x.key)}"`)))}
+        ${panel("Most Active Users", list(aggregate(rows, r => r.Username, r => r.seconds), x => barRow(x.key, fmtDuration(x.value), maxOf(aggregate(rows, r => r.Username, r => r.seconds)), x.value, `data-user="${escAttr(x.key)}"`)))}
+      </section>`;
+    wireClicks();
+  }
+
+  function renderUsers() {
+    const rows = formRows();
+    const users = aggregate(rows, r => r.Username, r => r.seconds).filter(x => matchesSearch([x.key, ...userMachines(x.key)])).map(x => {
+      const latest = latestUserRow(x.key);
+      return { ...x, latest, machines: userMachines(x.key), forms: aggregate(rows.filter(r => eq(r.Username, x.key)), r => r.FormName, r => r.seconds) };
+    });
+    const selected = state.selectedUser || (users[0] && users[0].key) || "";
+    state.selectedUser = selected;
+    const detailRows = rows.filter(r => eq(r.Username, selected));
+    el.content.innerHTML = `
+      <section class="split-detail">
+        ${panel("Users", table(["User","Usage","Build","Status","Machine"], users, u => [
+          u.key, fmtDuration(u.value), clean(u.latest?.Build), statusBadge(clean(u.latest?.Status)), u.machines.join(", ")
+        ], u => `data-user="${escAttr(u.key)}"`))}
+        ${panel(`User Detail: ${esc(selected || "None")}`, selected ? userDetail(selected, detailRows) : empty("No matching user."))}
+      </section>`;
+    wireClicks();
+  }
+
+  function renderForms() {
+    const rows = formRows();
+    const forms = aggregate(rows, r => r.FormName, r => r.seconds).filter(x => matchesSearch([x.key]));
+    const selected = state.selectedForm || (forms[0] && forms[0].key) || "";
+    state.selectedForm = selected;
+    const detailRows = rows.filter(r => eq(r.FormName, selected));
+    el.content.innerHTML = `
+      <section class="split-detail">
+        ${panel("Forms", table(["Form","Usage","Opens","Users"], forms, f => [
+          f.key, fmtDuration(f.value), sum(rows.filter(r => eq(r.FormName, f.key)), r => r.opens), unique(rows.filter(r => eq(r.FormName, f.key)).map(r => r.Username)).length
+        ], f => `data-form="${escAttr(f.key)}"`))}
+        ${panel(`Form Detail: ${esc(selected || "None")}`, selected ? formDetail(selected, detailRows) : empty("No matching form."))}
+      </section>`;
+    wireClicks();
+  }
+
+  function renderMachines() {
+    const usage = formRows();
+    const machines = unique([...state.rows.users.map(u => u.Machine), ...usage.map(u => u.Machine), ...state.rows.machines.map(m => m.Machine)]).filter(m => m && matchesSearch([m, machineMeta(m)?.Nickname, machineMeta(m)?.Groups]));
+    const selected = state.selectedMachine || machines[0] || "";
+    state.selectedMachine = selected;
+    el.content.innerHTML = `
+      <section class="split-detail">
+        ${panel("Machines", table(["Machine","Nickname","Build","Status","Last Seen"], machines.map(m => ({ name: m, meta: machineMeta(m), latest: latestMachineRow(m), seconds: machineSeconds(m) })), m => [
+          m.name, clean(m.meta?.Nickname), clean(m.latest?.Build), statusBadge(clean(m.latest?.Status)), fmtDate(m.latest?.lastSeen)
+        ], m => `data-machine="${escAttr(m.name)}"`))}
+        ${panel(`Machine Detail: ${esc(selected || "None")}`, selected ? machineDetail(selected) : empty("No matching machine."))}
+      </section>`;
+    wireClicks();
+  }
+
+  function renderGroups() {
+    const groups = state.rows.groups.filter(g => matchesSearch([g.GroupName, g.Description])).map(g => ({ ...g, members: groupMembers(g.GroupName) }));
+    el.content.innerHTML = `
+      <section class="grid two">
+        ${panel("Groups", table(["Group","Machines","Description"], groups, g => [g.GroupName, g.members.length, g.Description]))}
+        ${panel("Group Members", groups.length ? groups.map(g => `<div class="row"><div><div class="title">${esc(g.GroupName)}</div><div class="sub">${esc(g.members.join(", ") || "No machines assigned")}</div></div><div class="value">${g.members.length}</div></div>`).join("") : empty("No groups found."))}
+      </section>`;
+  }
+
+  function renderQuickLinks() {
+    const usage = quickLinkRows().filter(x => matchesSearch([x.key]));
+    const links = state.rows.quickLinks.filter(l => matchesSearch([l.Title, l.Url, l.BuildVisibility]));
+    el.content.innerHTML = `
+      <section class="grid two">
+        ${panel("Quick Link Usage", list(usage, x => row(x.key, x.value, `Last clicked ${fmtDate(x.lastClicked)}`)))}
+        ${panel("Quick Link Directory", table(["Title","Visible To","Url"], links, l => [l.Title, clean(l.BuildVisibility) || "Both", link(l.Url)]))}
+      </section>`;
+  }
+
+  function renderFeedback() {
+    const items = state.rows.feedback.filter(f => matchesSearch([f.DisplayName, f.Category, f.Message, f.Username, f.Machine, f.Status])).sort((a,b) => b.date - a.date);
+    const selected = state.selectedFeedback || (items[0] && items[0].Id) || "";
+    state.selectedFeedback = selected;
+    const item = items.find(f => f.Id === selected);
+    el.content.innerHTML = `
+      <section class="split-detail">
+        ${panel("Feedback", table(["Submitted","Name","Category","Status","Machine"], items, f => [
+          fmtDate(f.date), f.DisplayName, f.Category, statusBadge(f.Status), f.Machine
+        ], f => `data-feedback="${escAttr(f.Id)}"`))}
+        ${panel("Feedback Detail", item ? feedbackDetail(item) : empty("No feedback selected."))}
+      </section>`;
+    wireClicks();
+  }
+
+  function renderVersions() {
+    const users = state.rows.users.filter(u => matchesSearch([u.Username, u.Machine, u.Build, u.AssemblyVersion]));
+    el.content.innerHTML = `
+      <section class="grid three">
+        ${panel("Latest Versions", state.rows.versions.map(v => row(v.build, esc(v.version || "Missing"), "Synced version file")).join(""))}
+        ${panel("Outdated Users", table(["User","Machine","Build","Installed","Latest"], outdatedUsers(), u => [u.Username, u.Machine, u.Build, u.AssemblyVersion, latestVersion(u.Build)]))}
+        ${panel("Managers", table(["User","Type"], state.rows.managers, m => [first(m.Username, m.User, m.Name), first(m.AccountType, m.Type, m.Role)]))}
+      </section>
+      ${panel("All User Version Rows", table(["User","Machine","Build","Status","Last Heartbeat","Version"], users, u => [u.Username, u.Machine, u.Build, statusBadge(u.Status), fmtDate(u.lastSeen), u.AssemblyVersion]))}`;
+  }
+
+  function userDetail(user, rows) {
+    const latest = latestUserRow(user);
+    return `
+      <div class="grid two">
+        <div>${kv("User", user)}${kv("Machine(s)", userMachines(user).join(", "))}${kv("Build", clean(latest?.Build))}${kv("Status", statusBadge(clean(latest?.Status)))}${kv("Version", clean(latest?.AssemblyVersion))}</div>
+        <div>${metric("Total usage", fmtDuration(sum(rows, r => r.seconds)), `${rows.length} rows`)}${metric("Sessions", unique(rows.map(r => r.SessionId)).length, "Distinct sessions")}</div>
+      </div>
+      <div class="panel-body">${table(["Form","Usage","Rows","Last Used"], aggregate(rows, r => r.FormName, r => r.seconds), f => [f.key, fmtDuration(f.value), f.count, fmtDate(maxDate(rows.filter(r => eq(r.FormName, f.key)), "date"))])}</div>
+      <div class="panel-body">${table(["Recent Form","Duration","Machine","When"], recentRows(rows, 18), r => [r.FormName, fmtDuration(r.seconds), r.Machine, fmtDate(r.date)])}</div>`;
+  }
+
+  function formDetail(form, rows) {
+    return `
+      <div class="grid two">
+        ${metric("Total usage", fmtDuration(sum(rows, r => r.seconds)), `${rows.length} rows`)}
+        ${metric("Users", unique(rows.map(r => r.Username)).length, "Distinct users")}
+      </div>
+      <div class="panel-body">${table(["User","Usage","Machine","Last Used"], aggregate(rows, r => r.Username, r => r.seconds), u => [u.key, fmtDuration(u.value), userMachines(u.key).join(", "), fmtDate(maxDate(rows.filter(r => eq(r.Username, u.key)), "date"))], u => `data-user="${escAttr(u.key)}"` )}</div>
+      <div class="panel-body">${table(["Date","User","Machine","Duration"], recentRows(rows, 24), r => [fmtDate(r.date), r.Username, r.Machine, fmtDuration(r.seconds)])}</div>`;
+  }
+
+  function machineDetail(machine) {
+    const rows = formRows().filter(r => eq(r.Machine, machine));
+    const meta = machineMeta(machine);
+    const latest = latestMachineRow(machine);
+    return `
+      <div>${kv("Nickname", clean(meta?.Nickname))}${kv("Groups", clean(meta?.Groups))}${kv("Notes", clean(meta?.Notes))}${kv("Status", statusBadge(clean(latest?.Status)))}${kv("Last Seen", fmtDate(latest?.lastSeen))}</div>
+      <div class="panel-body">${table(["User","Usage","Forms"], aggregate(rows, r => r.Username, r => r.seconds), u => [u.key, fmtDuration(u.value), unique(rows.filter(r => eq(r.Username, u.key)).map(r => r.FormName)).length], u => `data-user="${escAttr(u.key)}"` )}</div>
+      <div class="panel-body">${table(["Form","Usage","Last Used"], aggregate(rows, r => r.FormName, r => r.seconds), f => [f.key, fmtDuration(f.value), fmtDate(maxDate(rows.filter(r => eq(r.FormName, f.key)), "date"))], f => `data-form="${escAttr(f.key)}"` )}</div>`;
+  }
+
+  function feedbackDetail(f) {
+    return `${kv("Name", f.DisplayName)}${kv("Email", f.Email)}${kv("Category", f.Category)}${kv("Status", statusBadge(f.Status))}${kv("User", f.Username)}${kv("Machine", f.Machine)}${kv("Build", f.Build)}${kv("Submitted", fmtDate(f.date))}<div class="panel-body"><h3>Message</h3><p class="message">${esc(f.Message)}</p></div>`;
+  }
+
+  function healthList() {
+    const versionMissing = state.rows.versions.some(v => !v.version || /missing/i.test(v.version));
+    const wallpaperCount = wallpaperRows().reduce((a,b) => a + number(b.value), 0);
+    return [
+      row("Feature usage", state.rows.feature.length, "FeatureUsage.csv rows", "", ""),
+      row("User usage", state.rows.users.length, "UserUsage.csv rows", "", ""),
+      row("Wallpaper usage", wallpaperCount, wallpaperCount ? "customization_usage.csv rows" : "No selections yet", "", ""),
+      row("Versions", versionMissing ? "Check" : "Current", "Version files synced", "", "")
+    ].join("");
+  }
+
+  function metric(label, value, hint) { return `<div class="metric"><div class="metric-label">${esc(label)}</div><div class="metric-value">${esc(value)}</div><div class="metric-hint">${esc(hint || "")}</div></div>`; }
+  function panel(title, body) { return `<article class="panel"><div class="panel-head"><h2>${esc(title)}</h2></div><div class="panel-body">${body || empty("No data.")}</div></article>`; }
+  function row(title, value, sub, cls = "", attrs = "") { return `<div class="row ${cls}" ${attrs}><div><div class="title">${esc(title || "Unknown")}</div><div class="sub">${esc(sub || "")}</div></div><div class="value">${value}</div></div>`; }
+  function barRow(title, display, max, raw = display, attrs = "") { const width = max ? Math.max(2, Math.round((number(raw) / number(max)) * 100)) : 0; return `<div class="row clickable" ${attrs}><div><div class="title">${esc(title)}</div><div class="bar"><span style="width:${width}%"></span></div></div><div class="value">${display}</div></div>`; }
+  function list(items, fn) { return items && items.length ? items.map(fn).join("") : empty("No matching data."); }
+  function empty(text) { return `<div class="empty">${esc(text)}</div>`; }
+  function table(headers, items, rowFn, attrFn) {
+    if (!items || !items.length) return empty("No matching rows.");
+    return `<div class="table-wrap"><table><thead><tr>${headers.map(h => `<th>${esc(h)}</th>`).join("")}</tr></thead><tbody>${items.map(item => {
+      const attrs = attrFn ? attrFn(item) : "";
+      return `<tr class="${attrs ? "clickable" : ""}" ${attrs}>${rowFn(item).map(v => `<td>${v}</td>`).join("")}</tr>`;
+    }).join("")}</tbody></table></div>`;
+  }
+  function kv(k, v) { return `<div class="kv"><span>${esc(k)}</span><span>${typeof v === "string" && v.includes("<") ? v : esc(v || "")}</span></div>`; }
+  function statusBadge(v) { const s = clean(v) || "Unknown"; const c = /active|fixed|current/i.test(s) ? "ok" : /inactive|working|follow|ack/i.test(s) ? "warn" : /blocked|outdated|new|unknown/i.test(s) ? "bad" : ""; return `<span class="badge ${c}">${esc(s)}</span>`; }
+  function link(v) { const url = clean(v); return url ? `<a href="${escAttr(url)}" target="_blank" rel="noopener">${esc(url)}</a>` : ""; }
+
   function aggregate(rows, keyFn, valueFn) {
     const map = new Map();
-    rows.forEach(r => { const key = clean(keyFn(r)); if (!key) return; map.set(key, (map.get(key) || 0) + valueFn(r)); });
-    return [...map.entries()].map(([key, value]) => ({ key, value }));
+    rows.forEach(r => {
+      const key = clean(keyFn(r)) || "Unknown";
+      const item = map.get(key) || { key, value: 0, count: 0 };
+      item.value += number(valueFn(r));
+      item.count += 1;
+      map.set(key, item);
+    });
+    return [...map.values()].sort((a,b) => b.value - a.value || a.key.localeCompare(b.key));
   }
-  function dedupeCount(rows, keyFn) { return new Set(rows.map(r => clean(keyFn(r))).filter(Boolean)).size; }
-  function pct(part, whole) { if (!whole) return "n/a"; return `${Math.round((part / whole) * 100)}%`; }
-  function statusBadge(status) {
-    const s = clean(status).toLowerCase();
-    if (s.includes("fix") || s.includes("ack")) return "good";
-    if (s.includes("work") || s.includes("follow")) return "warn";
-    return "bad";
+  function aggregateAvg(rows, keyFn, valueFn) { return aggregate(rows, keyFn, valueFn).map(x => ({ ...x, value: x.count ? x.value / x.count : 0 })); }
+  function aggregateBy(rows, keyFn, uniqueFn) {
+    const map = new Map();
+    rows.forEach(r => {
+      const key = clean(keyFn(r)); if (!key) return;
+      const set = map.get(key) || new Set();
+      set.add(uniqueFn(r));
+      map.set(key, set);
+    });
+    return [...map.entries()].map(([key, set]) => ({ key, value: set.size })).sort((a,b) => a.key.localeCompare(b.key));
   }
-  function escapeHtml(text) {
-    return String(text).replace(/[&<>"']/g, ch => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[ch]));
+  function wallpaperRows() {
+    return aggregate(state.rows.wallpaper.filter(r => clean(r.name) && !/^wallpaper$/i.test(r.name)), r => r.name, () => 1);
+  }
+  function quickLinkRows() {
+    return aggregate(state.rows.quickLinkUsage.filter(r => inRange(r.date, maxDate(state.rows.quickLinkUsage, "date"))), r => r.LinkName, r => r.clicks).map(x => ({ ...x, lastClicked: maxDate(state.rows.quickLinkUsage.filter(r => eq(r.LinkName, x.key)), "date") }));
+  }
+  function outdatedUsers() { return state.rows.users.filter(u => clean(u.AssemblyVersion) && clean(latestVersion(u.Build)) && !eq(u.AssemblyVersion, latestVersion(u.Build))); }
+  function openFeedback() { return state.rows.feedback.filter(f => !/fixed/i.test(f.Status)); }
+  function latestVersion(build) { return clean((state.rows.versions.find(v => eq(v.build, build)) || {}).version).replace(/^v/i, ""); }
+  function latestUserRow(user) { return state.rows.users.filter(u => eq(u.Username, user)).sort((a,b) => b.lastSeen - a.lastSeen)[0] || {}; }
+  function latestMachineRow(machine) { return state.rows.users.filter(u => eq(u.Machine, machine)).sort((a,b) => b.lastSeen - a.lastSeen)[0] || {}; }
+  function machineMeta(machine) { return state.rows.machines.find(m => eq(m.Machine, machine)) || {}; }
+  function userMachines(user) { return unique([...state.rows.users.filter(u => eq(u.Username, user)).map(u => u.Machine), ...state.rows.feature.filter(r => eq(r.Username, user)).map(r => r.Machine)]).filter(Boolean); }
+  function machineSeconds(machine) { return sum(formRows().filter(r => eq(r.Machine, machine)), r => r.seconds); }
+  function groupMembers(group) { return state.rows.machines.filter(m => clean(m.Groups).split(/[|;,]/).map(x => x.trim()).some(x => eq(x, group))).map(m => m.Machine); }
+  function recentRows(rows, n) { return rows.slice().sort((a,b) => b.date - a.date).slice(0, n); }
+  function counts() { return { feature: state.rows.feature?.length || 0, users: state.rows.users?.length || 0, feedback: state.rows.feedback?.length || 0 }; }
+  function maxOf(items) { return Math.max(1, ...items.map(x => number(x.value))); }
+  function maxDate(rows, prop) { const dates = rows.map(r => r[prop]).filter(d => d instanceof Date && !Number.isNaN(d.getTime())); return dates.length ? new Date(Math.max(...dates.map(d => d.getTime()))) : new Date(); }
+  function inRange(date, max) { if (state.range === "all") return true; if (!(date instanceof Date) || Number.isNaN(date.getTime())) return false; const days = number(state.range); const start = new Date(max); start.setDate(start.getDate() - days + 1); start.setHours(0,0,0,0); const end = new Date(max); end.setHours(23,59,59,999); return date >= start && date <= end; }
+  function matchBuild(build) { return state.build === "All Builds" || eq(build, state.build); }
+  function matchesSearch(values) { const q = clean(state.search).toLowerCase(); return !q || values.join(" ").toLowerCase().includes(q); }
+  function setActiveButtons() {
+    el.ranges.querySelectorAll("button").forEach(b => b.classList.toggle("active", b.dataset.range === state.range));
+    el.tabs.querySelectorAll("button").forEach(b => b.classList.toggle("active", b.dataset.view === state.view));
+    el.build.value = state.build;
+    el.search.value = state.search;
+  }
+  function wireClicks() {
+    document.querySelectorAll("[data-user]").forEach(x => x.addEventListener("click", () => { state.selectedUser = x.dataset.user; state.view = "users"; render(); }));
+    document.querySelectorAll("[data-form]").forEach(x => x.addEventListener("click", () => { state.selectedForm = x.dataset.form; state.view = "forms"; render(); }));
+    document.querySelectorAll("[data-machine]").forEach(x => x.addEventListener("click", () => { state.selectedMachine = x.dataset.machine; state.view = "machines"; render(); }));
+    document.querySelectorAll("[data-feedback]").forEach(x => x.addEventListener("click", () => { state.selectedFeedback = x.dataset.feedback; renderFeedback(); }));
   }
 
-  els.refreshBtn.addEventListener("click", () => loadDashboard());
-  loadDashboard().catch(err => {
-    els.statusPill.textContent = "Load failed";
-    els.statusPill.className = "status-pill bad";
-    document.body.classList.remove("is-loading");
-    els.lastUpdated.textContent = "Dashboard could not load.";
-    els.usageSummary.innerHTML = emptyState(escapeHtml(err.message || "Unknown error"));
-    els.userSummary.innerHTML = emptyState("Try Refresh after checking network access.");
+  function clean(v) { return String(v ?? "").trim(); }
+  function first(...values) { return values.find(v => clean(v)); }
+  function lastValue(o) { const values = Object.values(o).map(clean).filter(Boolean); return values[values.length - 1] || ""; }
+  function number(v) { const n = Number(String(v ?? "").replace(/[^0-9.-]/g, "")); return Number.isFinite(n) ? n : 0; }
+  function sum(rows, fn) { return rows.reduce((a, r) => a + number(fn(r)), 0); }
+  function unique(items) { return [...new Set(items.map(clean).filter(Boolean))]; }
+  function uniqueValue(...items) { return items.map(clean).join("|"); }
+  function eq(a, b) { return clean(a).toLowerCase() === clean(b).toLowerCase(); }
+  function dateValue(v) { const d = new Date(clean(v).replace(" ", "T")); return Number.isNaN(d.getTime()) ? new Date("") : d; }
+  function fmtDate(d) { return d instanceof Date && !Number.isNaN(d.getTime()) ? d.toLocaleString() : ""; }
+  function fmtDuration(seconds) { const mins = Math.round(number(seconds) / 60); if (!mins) return "0m"; return mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`; }
+  function pct(part, total) { return total ? `${Math.round((part / total) * 100)}% of tracked time` : "n/a"; }
+  function dayKey(d) { return d instanceof Date && !Number.isNaN(d.getTime()) ? `${d.getMonth()+1}/${d.getDate()}` : ""; }
+  function dayName(d) { return d instanceof Date && !Number.isNaN(d.getTime()) ? d.toLocaleDateString(undefined, { weekday: "long" }) : "Unknown"; }
+  function esc(v) { return String(v ?? "").replace(/[&<>"']/g, ch => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", "\"":"&quot;", "'":"&#39;" }[ch])); }
+  function escAttr(v) { return esc(v).replace(/`/g, "&#96;"); }
+
+  el.refresh.addEventListener("click", load);
+  el.ranges.addEventListener("click", e => { if (e.target.dataset.range) { state.range = e.target.dataset.range; render(); } });
+  el.tabs.addEventListener("click", e => { if (e.target.dataset.view) { state.view = e.target.dataset.view; render(); } });
+  el.build.addEventListener("change", e => { state.build = e.target.value; render(); });
+  el.search.addEventListener("input", e => { state.search = e.target.value; render(); });
+  load().catch(err => {
+    el.status.textContent = "Dashboard load failed.";
+    el.content.innerHTML = empty(err.message || "Unknown error");
   });
 })();

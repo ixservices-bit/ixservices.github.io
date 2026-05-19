@@ -14,8 +14,11 @@
 !data/UserUsage.csv
 !data/customization_usage.csv
 !data/quicklinks.csv
+!data/QuickLinkUsage.csv
 !data/feedback.csv
 !data/managers.csv
+!data/machines.csv
+!data/groups.csv
 !data/ActiveUsers.csv
 !data/icqa_version.txt
 !data/rdc_version.txt
