@@ -160,7 +160,7 @@
       </section>
       <section class="grid three">
         ${panel("Top Forms", list(topForms, x => row(x.key, fmtDuration(x.value), `${x.count} row(s)`, "clickable", `data-form="${escAttr(x.key)}"`)))}
-        ${panel("Most Active Users", list(users, x => row(x.key, fmtDuration(x.value), userSummary(x.key, rows), "clickable", `data-user="${escAttr(x.key)}"`)))}
+        ${panel("Most Active Users", listWithOutlier(users, x => userBarRow(x, users, userSummary(x.key, rows))))}
         ${panel("Wallpaper Usage", list(wallpaper, x => row(x.key, x.value, "selection count")))}
       </section>
       <section class="grid two">
@@ -195,17 +195,17 @@
 
   function renderUsers() {
     const rows = formRows();
-    const users = aggregate(rows, r => r.Username, r => r.seconds).filter(x => matchesSearch([x.key, ...userMachines(x.key)])).map(x => {
+    const users = aggregate(rows, r => r.Username, r => r.seconds).filter(x => matchesSearch([x.key])).map(x => {
       const latest = latestUserRow(x.key);
-      return { ...x, latest, machines: userMachines(x.key), forms: aggregate(rows.filter(r => eq(r.Username, x.key)), r => r.FormName, r => r.seconds) };
+      return { ...x, latest, forms: aggregate(rows.filter(r => eq(r.Username, x.key)), r => r.FormName, r => r.seconds) };
     });
     const selected = state.selectedUser || (users[0] && users[0].key) || "";
     state.selectedUser = selected;
     const detailRows = rows.filter(r => eq(r.Username, selected));
     el.content.innerHTML = `
       <section class="split-detail">
-        ${panel("Users", table(["User","Usage","Build","Status","Machine"], users, u => [
-          u.key, fmtDuration(u.value), clean(u.latest?.Build), statusBadge(clean(u.latest?.Status)), u.machines.join(", ")
+        ${panel("Users", table(["User","Usage","Build","Status"], users, u => [
+          u.key, fmtDuration(u.value), clean(u.latest?.Build), statusBadge(clean(u.latest?.Status))
         ], u => `data-user="${escAttr(u.key)}"`))}
         ${panel(`User Detail: ${esc(selected || "None")}`, selected ? userDetail(selected, detailRows) : empty("No matching user."))}
       </section>`;
@@ -293,7 +293,7 @@
     const latest = latestUserRow(user);
     return `
       <div class="grid two">
-        <div>${kv("User", user)}${kv("Machine(s)", userMachines(user).join(", "))}${kv("Build", clean(latest?.Build))}${kv("Status", statusBadge(clean(latest?.Status)))}${kv("Version", clean(latest?.AssemblyVersion))}</div>
+        <div>${kv("User", user)}${kv("Build", clean(latest?.Build))}${kv("Status", statusBadge(clean(latest?.Status)))}${kv("Version", clean(latest?.AssemblyVersion))}</div>
         <div>${metric("Total usage", fmtDuration(sum(rows, r => r.seconds)), `${rows.length} rows`)}${metric("Sessions", unique(rows.map(r => r.SessionId)).length, "Distinct sessions")}</div>
       </div>
       <div class="panel-body">${table(["Form","Usage","Last Used"], aggregate(rows, r => r.FormName, r => r.seconds), f => [f.key, fmtDuration(f.value), shortDate(maxDate(rows.filter(r => eq(r.FormName, f.key)), "date"))], "", "compact-table")}</div>
@@ -339,6 +339,20 @@
   function panel(title, body) { return `<article class="panel"><div class="panel-head"><h2>${esc(title)}</h2></div><div class="panel-body">${body || empty("No data.")}</div></article>`; }
   function row(title, value, sub, cls = "", attrs = "") { return `<div class="row ${cls}" ${attrs}><div><div class="title">${esc(title || "Unknown")}</div><div class="sub">${esc(sub || "")}</div></div><div class="value">${value}</div></div>`; }
   function barRow(title, display, max, raw = display, attrs = "") { const width = max ? Math.max(2, Math.round((number(raw) / number(max)) * 100)) : 0; return `<div class="row clickable" ${attrs}><div><div class="title">${esc(title)}</div><div class="bar"><span style="width:${width}%"></span></div></div><div class="value">${display}</div></div>`; }
+  function userBarRow(item, items, sub) {
+    const scale = outlierScale(items, item);
+    const width = Math.min(100, Math.max(2, Math.round((item.value / scale) * 100)));
+    return `<div class="row clickable" data-user="${escAttr(item.key)}"><div><div class="title">${esc(item.key)}</div><div class="sub">${esc(sub || "")}</div><div class="bar"><span style="width:${width}%"></span></div></div><div class="value">${fmtDuration(item.value)}</div></div>`;
+  }
+  function outlierScale(items, item) {
+    if (!items || items.length < 2) return Math.max(1, item.value);
+    const sorted = items.slice().sort((a, b) => b.value - a.value);
+    const top = sorted[0].value;
+    const second = Math.max(1, sorted[1].value);
+    if (top >= second * 2 && item.value !== top) return second;
+    return Math.max(1, top);
+  }
+  function listWithOutlier(items, fn) { return items && items.length ? items.map(fn).join("") : empty("No matching data."); }
   function list(items, fn) { return items && items.length ? items.map(fn).join("") : empty("No matching data."); }
   function empty(text) { return `<div class="empty">${esc(text)}</div>`; }
   function table(headers, items, rowFn, attrFn, className = "") {
@@ -394,7 +408,6 @@
     const latest = maxDate(userRows, "date");
     const parts = [];
     parts.push(`${forms} form${forms === 1 ? "" : "s"}`);
-    if (machines) parts.push(`${machines} machine${machines === 1 ? "" : "s"}`);
     if (latest instanceof Date && !Number.isNaN(latest.getTime())) parts.push(`last ${fmtDate(latest)}`);
     return parts.join(" • ");
   }
