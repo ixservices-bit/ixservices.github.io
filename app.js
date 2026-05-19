@@ -54,6 +54,14 @@
     });
   }
 
+  function quickLinkObjects(text) {
+    return parseCsv(text).map(row => ({
+      Title: clean(row[0]),
+      Url: clean(row[1]),
+      BuildVisibility: clean(row[2])
+    })).filter(x => x.Title && x.Url && !/^title$/i.test(x.Title));
+  }
+
   async function fetchText(url) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), config.fetchTimeoutMs || 12000);
@@ -92,7 +100,7 @@
     }));
     state.rows.users = toObjects(state.raw.userUsage, ["Username","Machine","Build","Status","LastHeartbeat","AssemblyVersion"]).map(r => ({ ...r, lastSeen: dateValue(r.LastHeartbeat) }));
     state.rows.wallpaper = toObjects(state.raw.wallpaperUsage, ["Timestamp","Username","Machine","Build","Wallpaper"]).map(r => ({ ...r, date: dateValue(r.Timestamp), name: first(r.Wallpaper, r.Theme, r.Name, r.Selection, r.Value) || lastValue(r) }));
-    state.rows.quickLinks = toObjects(state.raw.quickLinks, ["Title","Url","BuildVisibility"]);
+    state.rows.quickLinks = quickLinkObjects(state.raw.quickLinks);
     state.rows.quickLinkUsage = toObjects(state.raw.quickLinkUsage, ["LinkName","ClickCount","LastClicked"]).map(r => ({ ...r, clicks: number(r.ClickCount), date: dateValue(r.LastClicked) }));
     state.rows.feedback = toObjects(state.raw.feedback, ["Id","SubmittedAt","DisplayName","Email","Category","Message","Username","Machine","Build","Status","StatusUpdatedAt","StatusUpdatedBy"]).map(r => ({ ...r, date: dateValue(r.SubmittedAt) }));
     state.rows.managers = toObjects(state.raw.managers, ["Username","AccountType"]);
@@ -212,9 +220,9 @@
     const detailRows = rows.filter(r => eq(r.FormName, selected));
     el.content.innerHTML = `
       <section class="split-detail">
-        ${panel("Forms", table(["Form","Usage","Opens","Users"], forms, f => [
-          f.key, fmtDuration(f.value), sum(rows.filter(r => eq(r.FormName, f.key)), r => r.opens), unique(rows.filter(r => eq(r.FormName, f.key)).map(r => r.Username)).length
-        ], f => `data-form="${escAttr(f.key)}"`))}
+        ${panel("Forms", table(["Form","Usage","Users"], forms, f => [
+          f.key, fmtDuration(f.value), unique(rows.filter(r => eq(r.FormName, f.key)).map(r => r.Username)).length
+        ], f => `data-form="${escAttr(f.key)}"`, "compact-table"))}
         ${panel(`Form Detail: ${esc(selected || "None")}`, selected ? formDetail(selected, detailRows) : empty("No matching form."))}
       </section>`;
     wireClicks();
@@ -250,8 +258,9 @@
     el.content.innerHTML = `
       <section class="grid two">
         ${panel("Quick Link Usage", list(usage, x => row(x.key, x.value, `Last clicked ${fmtDate(x.lastClicked)}`)))}
-        ${panel("Quick Link Directory", table(["Title","Visible To","Url"], links, l => [l.Title, clean(l.BuildVisibility) || "Both", link(l.Url)]))}
+        ${panel("Quick Link Directory", table(["Title","Visible To"], links, l => [l.Title, clean(l.BuildVisibility) || "Both"], l => `data-url="${escAttr(l.Url)}"`, "compact-table"))}
       </section>`;
+    document.querySelectorAll("[data-url]").forEach(x => x.addEventListener("click", () => window.open(x.dataset.url, "_blank", "noopener")));
   }
 
   function renderFeedback() {
@@ -287,8 +296,8 @@
         <div>${kv("User", user)}${kv("Machine(s)", userMachines(user).join(", "))}${kv("Build", clean(latest?.Build))}${kv("Status", statusBadge(clean(latest?.Status)))}${kv("Version", clean(latest?.AssemblyVersion))}</div>
         <div>${metric("Total usage", fmtDuration(sum(rows, r => r.seconds)), `${rows.length} rows`)}${metric("Sessions", unique(rows.map(r => r.SessionId)).length, "Distinct sessions")}</div>
       </div>
-      <div class="panel-body">${table(["Form","Usage","Rows","Last Used"], aggregate(rows, r => r.FormName, r => r.seconds), f => [f.key, fmtDuration(f.value), f.count, fmtDate(maxDate(rows.filter(r => eq(r.FormName, f.key)), "date"))])}</div>
-      <div class="panel-body">${table(["Recent Form","Duration","Machine","When"], recentRows(rows, 18), r => [r.FormName, fmtDuration(r.seconds), r.Machine, fmtDate(r.date)])}</div>`;
+      <div class="panel-body">${table(["Form","Usage","Last Used"], aggregate(rows, r => r.FormName, r => r.seconds), f => [f.key, fmtDuration(f.value), shortDate(maxDate(rows.filter(r => eq(r.FormName, f.key)), "date"))], "", "compact-table")}</div>
+      <div class="panel-body">${table(["Recent Form","Duration","When"], recentRows(rows, 18), r => [r.FormName, fmtDuration(r.seconds), shortDate(r.date)], "", "compact-table")}</div>`;
   }
 
   function formDetail(form, rows) {
@@ -332,9 +341,9 @@
   function barRow(title, display, max, raw = display, attrs = "") { const width = max ? Math.max(2, Math.round((number(raw) / number(max)) * 100)) : 0; return `<div class="row clickable" ${attrs}><div><div class="title">${esc(title)}</div><div class="bar"><span style="width:${width}%"></span></div></div><div class="value">${display}</div></div>`; }
   function list(items, fn) { return items && items.length ? items.map(fn).join("") : empty("No matching data."); }
   function empty(text) { return `<div class="empty">${esc(text)}</div>`; }
-  function table(headers, items, rowFn, attrFn) {
+  function table(headers, items, rowFn, attrFn, className = "") {
     if (!items || !items.length) return empty("No matching rows.");
-    return `<div class="table-wrap"><table><thead><tr>${headers.map(h => `<th>${esc(h)}</th>`).join("")}</tr></thead><tbody>${items.map(item => {
+    return `<div class="table-wrap ${className}"><table><thead><tr>${headers.map(h => `<th>${esc(h)}</th>`).join("")}</tr></thead><tbody>${items.map(item => {
       const attrs = attrFn ? attrFn(item) : "";
       return `<tr class="${attrs ? "clickable" : ""}" ${attrs}>${rowFn(item).map(v => `<td>${v}</td>`).join("")}</tr>`;
     }).join("")}</tbody></table></div>`;
@@ -421,6 +430,7 @@
   function eq(a, b) { return clean(a).toLowerCase() === clean(b).toLowerCase(); }
   function dateValue(v) { const d = new Date(clean(v).replace(" ", "T")); return Number.isNaN(d.getTime()) ? new Date("") : d; }
   function fmtDate(d) { return d instanceof Date && !Number.isNaN(d.getTime()) ? d.toLocaleString() : ""; }
+  function shortDate(d) { return d instanceof Date && !Number.isNaN(d.getTime()) ? d.toLocaleDateString(undefined, { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" }) : ""; }
   function fmtDuration(seconds) { const mins = Math.round(number(seconds) / 60); if (!mins) return "0m"; return mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`; }
   function pct(part, total) { return total ? `${Math.round((part / total) * 100)}% of tracked time` : "n/a"; }
   function dayKey(d) { return d instanceof Date && !Number.isNaN(d.getTime()) ? `${d.getMonth()+1}/${d.getDate()}` : ""; }
