@@ -149,7 +149,7 @@
     const rdc = sum(rows.filter(r => /rdc/i.test(r.Build)), r => r.seconds);
     const active = state.rows.users.filter(u => /active/i.test(u.Status)).length;
     const topForms = aggregate(rows, r => r.FormName, r => r.seconds).slice(0, 8);
-    const users = aggregate(rows, r => r.Username, r => r.seconds).slice(0, 8);
+    const users = aggregateUsers(rows).slice(0, 8);
     const wallpaper = wallpaperRows().slice(0, 8);
     el.content.innerHTML = `
       <section class="grid four">
@@ -188,14 +188,14 @@
         ${panel("Daily Active Users", list(daily, x => barRow(x.key, x.value, maxOf(daily))))}
         ${panel("Busiest Days", list(byDay, x => barRow(x.key, fmtDuration(x.value), maxOf(byDay), x.value)))}
         ${panel("Average Time By Form", list(avgByForm, x => barRow(x.key, fmtDuration(x.value), maxOf(avgByForm), x.value, `data-form="${escAttr(x.key)}"`)))}
-        ${panel("Most Active Users", list(aggregate(rows, r => r.Username, r => r.seconds), x => barRow(x.key, fmtDuration(x.value), maxOf(aggregate(rows, r => r.Username, r => r.seconds)), x.value, `data-user="${escAttr(x.key)}"`)))}
+        ${panel("Most Active Users", listWithOutlier(aggregateUsers(rows), x => userBarRow(x, aggregateUsers(rows), userSummary(x.key, rows))))}
       </section>`;
     wireClicks();
   }
 
   function renderUsers() {
     const rows = formRows();
-    const users = aggregate(rows, r => r.Username, r => r.seconds).filter(x => matchesSearch([x.key])).map(x => {
+    const users = aggregateUsers(rows).filter(x => matchesSearch([x.key])).map(x => {
       const latest = latestUserRow(x.key);
       return { ...x, latest, forms: aggregate(rows.filter(r => eq(r.Username, x.key)), r => r.FormName, r => r.seconds) };
     });
@@ -306,7 +306,7 @@
         ${metric("Total usage", fmtDuration(sum(rows, r => r.seconds)), `${rows.length} rows`)}
         ${metric("Users", unique(rows.map(r => r.Username)).length, "Distinct users")}
       </div>
-      <div class="panel-body">${table(["User","Usage","Machine","Last Used"], aggregate(rows, r => r.Username, r => r.seconds), u => [u.key, fmtDuration(u.value), userMachines(u.key).join(", "), fmtDate(maxDate(rows.filter(r => eq(r.Username, u.key)), "date"))], u => `data-user="${escAttr(u.key)}"` )}</div>
+        <div class="panel-body">${table(["User","Usage","Last Used"], aggregateUsers(rows), u => [u.key, fmtDuration(u.value), fmtDate(maxDate(rows.filter(r => eq(r.Username, u.key)), "date"))], u => `data-user="${escAttr(u.key)}"` )}</div>
       <div class="panel-body">${table(["Date","User","Machine","Duration"], recentRows(rows, 24), r => [fmtDate(r.date), r.Username, r.Machine, fmtDuration(r.seconds)])}</div>`;
   }
 
@@ -342,7 +342,8 @@
   function userBarRow(item, items, sub) {
     const scale = outlierScale(items, item);
     const width = Math.min(100, Math.max(2, Math.round((item.value / scale) * 100)));
-    return `<div class="row clickable" data-user="${escAttr(item.key)}"><div><div class="title">${esc(item.key)}</div><div class="sub">${esc(sub || "")}</div><div class="bar"><span style="width:${width}%"></span></div></div><div class="value">${fmtDuration(item.value)}</div></div>`;
+    const outlierClass = isTopOutlier(items, item) ? " outlier" : "";
+    return `<div class="row clickable" data-user="${escAttr(item.key)}"><div><div class="title">${esc(item.key)}</div><div class="sub">${esc(sub || "")}</div><div class="bar${outlierClass}"><span style="width:${width}%"></span></div></div><div class="value">${fmtDuration(item.value)}</div></div>`;
   }
   function outlierScale(items, item) {
     if (!items || items.length < 2) return Math.max(1, item.value);
@@ -351,6 +352,11 @@
     const second = Math.max(1, sorted[1].value);
     if (top >= second * 2 && item.value !== top) return second;
     return Math.max(1, top);
+  }
+  function isTopOutlier(items, item) {
+    if (!items || items.length < 2) return false;
+    const sorted = items.slice().sort((a, b) => b.value - a.value);
+    return item.value === sorted[0].value && sorted[0].value > Math.max(1, sorted[1].value) * 2;
   }
   function listWithOutlier(items, fn) { return items && items.length ? items.map(fn).join("") : empty("No matching data."); }
   function list(items, fn) { return items && items.length ? items.map(fn).join("") : empty("No matching data."); }
@@ -376,6 +382,16 @@
       map.set(key, item);
     });
     return [...map.values()].sort((a,b) => b.value - a.value || a.key.localeCompare(b.key));
+  }
+  function aggregateUsers(rows) {
+    const display = new Map();
+    rows.forEach(r => {
+      const raw = clean(r.Username);
+      if (!raw) return;
+      const key = raw.toLowerCase();
+      if (!display.has(key) || raw === raw.toUpperCase()) display.set(key, raw);
+    });
+    return aggregate(rows, r => clean(r.Username).toLowerCase(), r => r.seconds).map(x => ({ ...x, key: display.get(x.key) || x.key }));
   }
   function aggregateAvg(rows, keyFn, valueFn) { return aggregate(rows, keyFn, valueFn).map(x => ({ ...x, value: x.count ? x.value / x.count : 0 })); }
   function aggregateBy(rows, keyFn, uniqueFn) {
