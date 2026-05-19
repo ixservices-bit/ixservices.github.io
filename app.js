@@ -153,13 +153,13 @@
     const wallpaper = wallpaperRows().slice(0, 8);
     el.content.innerHTML = `
       <section class="grid four">
-        ${metric("Total usage", fmtDuration(total), `${rows.length} form usage rows`)}
+        ${metric("Total usage", fmtDuration(total), "Tracked form time")}
         ${metric("ICQA usage", fmtDuration(icqa), pct(icqa, total))}
         ${metric("RDC usage", fmtDuration(rdc), pct(rdc, total))}
-        ${metric("Active machines", active, `${state.rows.users.length} tracked user rows`)}
+        ${metric("Active machines", active, "Currently reporting active")}
       </section>
       <section class="grid three">
-        ${panel("Top Forms", list(topForms, x => row(x.key, fmtDuration(x.value), `${x.count} row(s)`, "clickable", `data-form="${escAttr(x.key)}"`)))}
+        ${panel("Top Forms", list(topForms, x => row(x.key, fmtDuration(x.value), formSummary(x.key, rows), "clickable", `data-form="${escAttr(x.key)}"`)))}
         ${panel("Most Active Users", listWithOutlier(users, x => userBarRow(x, users, userSummary(x.key, rows))))}
         ${panel("Wallpaper Usage", list(wallpaper, x => row(x.key, x.value, "selection count")))}
       </section>
@@ -294,7 +294,7 @@
     return `
       <div class="grid two">
         <div>${kv("User", user)}${kv("Build", clean(latest?.Build))}${kv("Status", statusBadge(clean(latest?.Status)))}${kv("Version", clean(latest?.AssemblyVersion))}</div>
-        <div>${metric("Total usage", fmtDuration(sum(rows, r => r.seconds)), `${rows.length} rows`)}${metric("Sessions", unique(rows.map(r => r.SessionId)).length, "Distinct sessions")}</div>
+        <div>${metric("Total usage", fmtDuration(sum(rows, r => r.seconds)), "Tracked time")}${metric("Sessions", unique(rows.map(r => r.SessionId)).length, "Distinct sessions")}</div>
       </div>
       <div class="panel-body">${table(["Form","Usage","Last Used"], aggregate(rows, r => r.FormName, r => r.seconds), f => [f.key, fmtDuration(f.value), shortDate(maxDate(rows.filter(r => eq(r.FormName, f.key)), "date"))], "", "compact-table")}</div>
       <div class="panel-body">${table(["Recent Form","Duration","When"], recentRows(rows, 18), r => [r.FormName, fmtDuration(r.seconds), shortDate(r.date)], "", "compact-table")}</div>`;
@@ -303,7 +303,7 @@
   function formDetail(form, rows) {
     return `
       <div class="grid two">
-        ${metric("Total usage", fmtDuration(sum(rows, r => r.seconds)), `${rows.length} rows`)}
+        ${metric("Total usage", fmtDuration(sum(rows, r => r.seconds)), "Tracked time")}
         ${metric("Users", unique(rows.map(r => r.Username)).length, "Distinct users")}
       </div>
         <div class="panel-body">${table(["User","Usage","Last Used"], aggregateUsers(rows), u => [u.key, fmtDuration(u.value), fmtDate(maxDate(rows.filter(r => eq(r.Username, u.key)), "date"))], u => `data-user="${escAttr(u.key)}"` )}</div>
@@ -420,14 +420,22 @@
   function userSummary(user, rows) {
     const userRows = rows.filter(r => eq(r.Username, user));
     const forms = unique(userRows.map(r => r.FormName)).length;
-    const machines = userMachines(user).length;
     const latest = maxDate(userRows, "date");
     const parts = [];
     parts.push(`${forms} form${forms === 1 ? "" : "s"}`);
-    if (latest instanceof Date && !Number.isNaN(latest.getTime())) parts.push(`last ${fmtDate(latest)}`);
+    if (latest instanceof Date && !Number.isNaN(latest.getTime())) parts.push(`last ${shortDate(latest)}`);
     return parts.join(" • ");
   }
   function machineSeconds(machine) { return sum(formRows().filter(r => eq(r.Machine, machine)), r => r.seconds); }
+  function formSummary(form, rows) {
+    const formItems = rows.filter(r => eq(r.FormName, form));
+    const users = unique(formItems.map(r => r.Username)).length;
+    const latest = maxDate(formItems, "date");
+    const parts = [];
+    if (users) parts.push(`${users} user${users === 1 ? "" : "s"}`);
+    if (latest instanceof Date && !Number.isNaN(latest.getTime())) parts.push(`last ${shortDate(latest)}`);
+    return parts.join(" • ");
+  }
   function groupMembers(group) { return state.rows.machines.filter(m => clean(m.Groups).split(/[|;,]/).map(x => x.trim()).some(x => eq(x, group))).map(m => m.Machine); }
   function recentRows(rows, n) { return rows.slice().sort((a,b) => b.date - a.date).slice(0, n); }
   function counts() { return { feature: state.rows.feature?.length || 0, users: state.rows.users?.length || 0, feedback: state.rows.feedback?.length || 0 }; }
@@ -459,7 +467,14 @@
   function eq(a, b) { return clean(a).toLowerCase() === clean(b).toLowerCase(); }
   function dateValue(v) { const d = new Date(clean(v).replace(" ", "T")); return Number.isNaN(d.getTime()) ? new Date("") : d; }
   function fmtDate(d) { return d instanceof Date && !Number.isNaN(d.getTime()) ? d.toLocaleString() : ""; }
-  function shortDate(d) { return d instanceof Date && !Number.isNaN(d.getTime()) ? d.toLocaleDateString(undefined, { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" }) : ""; }
+  function shortDate(d) {
+    if (!(d instanceof Date) || Number.isNaN(d.getTime())) return "";
+    const h = d.getHours();
+    const hour = h % 12 || 12;
+    const minute = String(d.getMinutes()).padStart(2, "0");
+    const suffix = h >= 12 ? "p" : "a";
+    return `${d.getMonth() + 1}/${d.getDate()} ${hour}:${minute}${suffix}`;
+  }
   function fmtDuration(seconds) { const mins = Math.round(number(seconds) / 60); if (!mins) return "0m"; return mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`; }
   function pct(part, total) { return total ? `${Math.round((part / total) * 100)}% of tracked time` : "n/a"; }
   function dayKey(d) { return d instanceof Date && !Number.isNaN(d.getTime()) ? `${d.getMonth()+1}/${d.getDate()}` : ""; }
