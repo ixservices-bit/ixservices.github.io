@@ -222,18 +222,14 @@ th, td { text-align: left; padding: 10px 9px; border-bottom: 1px solid rgba(255,
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.compact-table th,
+.compact-table td { padding-inline: 7px; }
 .compact-table th:first-child,
-.compact-table td:first-child { width: auto; }
+.compact-table td:first-child { width: 38%; }
 .compact-table th:nth-child(2),
-.compact-table td:nth-child(2) {
-  width: 76px;
-  text-align: left;
-}
+.compact-table td:nth-child(2) { width: 74px; text-align: left; }
 .compact-table th:nth-child(3),
-.compact-table td:nth-child(3) {
-  width: 96px;
-  text-align: left;
-}
+.compact-table td:nth-child(3) { width: auto; text-align: left; }
 th { color: var(--muted); background: rgba(255,255,255,.045); font-weight: 850; position: sticky; top: 0; }
 tr.clickable:hover td { background: rgba(128, 228, 207, .065); }
 .detail { border-left: 3px solid var(--accent); background: var(--surface-2); }

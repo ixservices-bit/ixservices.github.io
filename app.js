@@ -296,8 +296,8 @@
         <div>${kv("User", user)}${kv("Build", clean(latest?.Build))}${kv("Status", statusBadge(clean(latest?.Status)))}${kv("Version", clean(latest?.AssemblyVersion))}</div>
         <div>${metric("Total usage", fmtDuration(sum(rows, r => r.seconds)), "Tracked time")}${metric("Sessions", unique(rows.map(r => r.SessionId)).length, "Distinct sessions")}</div>
       </div>
-      <div class="panel-body">${table(["Form","Usage","Last Used"], aggregate(rows, r => r.FormName, r => r.seconds), f => [f.key, fmtDuration(f.value), shortDate(maxDate(rows.filter(r => eq(r.FormName, f.key)), "date"))], "", "compact-table")}</div>
-      <div class="panel-body">${table(["Recent Form","Duration","When"], recentRows(rows, 18), r => [r.FormName, fmtDuration(r.seconds), shortDate(r.date)], "", "compact-table")}</div>`;
+      <div class="panel-body">${table(["Form","Usage","Last Used"], aggregate(rows, r => r.FormName, r => r.seconds), f => [f.key, fmtDuration(f.value), fmtDate(maxDate(rows.filter(r => eq(r.FormName, f.key)), "date"))], f => `data-form="${escAttr(f.key)}"`, "compact-table")}</div>
+      <div class="panel-body">${table(["Recent Form","Duration","When"], recentRows(rows, 18), r => [r.FormName, fmtDuration(r.seconds), fmtDate(r.date)], r => `data-form="${escAttr(r.FormName)}"`, "compact-table")}</div>`;
   }
 
   function formDetail(form, rows) {
@@ -306,8 +306,8 @@
         ${metric("Total usage", fmtDuration(sum(rows, r => r.seconds)), "Tracked time")}
         ${metric("Users", unique(rows.map(r => r.Username)).length, "Distinct users")}
       </div>
-        <div class="panel-body">${table(["User","Usage","Last Used"], aggregateUsers(rows), u => [u.key, fmtDuration(u.value), fmtDate(maxDate(rows.filter(r => eq(r.Username, u.key)), "date"))], u => `data-user="${escAttr(u.key)}"` )}</div>
-      <div class="panel-body">${table(["Date","User","Machine","Duration"], recentRows(rows, 24), r => [fmtDate(r.date), r.Username, r.Machine, fmtDuration(r.seconds)])}</div>`;
+        <div class="panel-body">${table(["User","Usage","Last Used"], aggregateUsers(rows), u => [u.key, fmtDuration(u.value), fmtDate(maxDate(rows.filter(r => eq(r.Username, u.key)), "date"))], u => `data-user="${escAttr(u.key)}"`, "compact-table")}</div>
+      <div class="panel-body">${table(["Date","User","Duration"], recentRows(rows, 24), r => [fmtDate(r.date), r.Username, fmtDuration(r.seconds)], r => `data-user="${escAttr(r.Username)}"`, "compact-table")}</div>`;
   }
 
   function machineDetail(machine) {
