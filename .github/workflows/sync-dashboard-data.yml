@@ -17,13 +17,18 @@ jobs:
 
       - name: Download private dashboard data
         env:
-          GH_TOKEN: ${{ secrets.ICQA_DATA_SYNC_TOKEN }}
+          DATA_TOKEN: ${{ secrets.ICQA_DATA_SYNC_TOKEN }}
+          UPDATE_TOKEN: ${{ secrets.ICQA_UPDATE_SYNC_TOKEN }}
         run: |
           set -euo pipefail
 
-          if [ -z "${GH_TOKEN}" ]; then
+          if [ -z "${DATA_TOKEN}" ]; then
             echo "Missing ICQA_DATA_SYNC_TOKEN repository secret."
             exit 1
+          fi
+
+          if [ -z "${UPDATE_TOKEN}" ]; then
+            UPDATE_TOKEN="${DATA_TOKEN}"
           fi
 
           mkdir -p data
@@ -32,10 +37,11 @@ jobs:
             local repo="$1"
             local path="$2"
             local output="$3"
+            local token="$4"
             local url="https://api.github.com/repos/ixservices-bit/${repo}/contents/${path}?ref=main"
 
             status=$(curl -L -sS \
-              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Authorization: Bearer ${token}" \
               -H "Accept: application/vnd.github.raw" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
               -o "${output}.tmp" \
@@ -55,15 +61,15 @@ jobs:
             fi
           }
 
-          download data FeatureUsage.csv data/FeatureUsage.csv
-          download data UserUsage.csv data/UserUsage.csv
-          download data usersettings/customization_usage.csv data/customization_usage.csv
-          download data quicklinks.csv data/quicklinks.csv
-          download data feedback.csv data/feedback.csv
-          download data managers.csv data/managers.csv
-          download data ActiveUsers.csv data/ActiveUsers.csv
-          download update icqa_version.txt data/icqa_version.txt
-          download update rdc_version.txt data/rdc_version.txt
+          download data FeatureUsage.csv data/FeatureUsage.csv "${DATA_TOKEN}"
+          download data UserUsage.csv data/UserUsage.csv "${DATA_TOKEN}"
+          download data usersettings/customization_usage.csv data/customization_usage.csv "${DATA_TOKEN}"
+          download data quicklinks.csv data/quicklinks.csv "${DATA_TOKEN}"
+          download data feedback.csv data/feedback.csv "${DATA_TOKEN}"
+          download data managers.csv data/managers.csv "${DATA_TOKEN}"
+          download data ActiveUsers.csv data/ActiveUsers.csv "${DATA_TOKEN}"
+          download update icqa_version.txt data/icqa_version.txt "${UPDATE_TOKEN}"
+          download update rdc_version.txt data/rdc_version.txt "${UPDATE_TOKEN}"
 
       - name: Commit synced data
         run: |

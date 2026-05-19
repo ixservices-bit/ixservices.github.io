@@ -42,9 +42,19 @@ The `.github/workflows/sync-dashboard-data.yml` workflow refreshes those files f
 
 ## Private Data Sync
 
-Create a repository secret named `ICQA_DATA_SYNC_TOKEN` in the `ixservices-bit/ixservices.github.io` repo.
+Create repository secrets in the `ixservices-bit/ixservices.github.io` repo.
 
-The token needs read access to:
+Required:
+
+- `ICQA_DATA_SYNC_TOKEN`: token with read access to `ixservices-bit/data`
+
+Optional, but recommended if the update repo uses a separate token:
+
+- `ICQA_UPDATE_SYNC_TOKEN`: token with read access to `ixservices-bit/update`
+
+If `ICQA_UPDATE_SYNC_TOKEN` is missing, the workflow tries `ICQA_DATA_SYNC_TOKEN` for both repos.
+
+The workflow reads:
 
 - `ixservices-bit/data`
 - `ixservices-bit/update`
