@@ -12,7 +12,7 @@ This is a static, mobile-first dashboard for the ICQA Resources admin data.
 
 ## Data sources
 
-The dashboard reads local static files from the `data/` folder:
+The dashboard reads public synced copies from this repo's `data/` folder through raw GitHub URLs:
 
 - `FeatureUsage.csv`
 - `UserUsage.csv`
