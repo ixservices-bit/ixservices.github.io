@@ -11,7 +11,8 @@ window.ICQA_CONFIG = {
     groups: "https://raw.githubusercontent.com/ixservices-bit/ixservices.github.io/main/data/groups.csv",
     activeUsers: "https://raw.githubusercontent.com/ixservices-bit/ixservices.github.io/main/data/ActiveUsers.csv",
     icqaVersion: "https://raw.githubusercontent.com/ixservices-bit/ixservices.github.io/main/data/icqa_version.txt",
-    rdcVersion: "https://raw.githubusercontent.com/ixservices-bit/ixservices.github.io/main/data/rdc_version.txt"
+    rdcVersion: "https://raw.githubusercontent.com/ixservices-bit/ixservices.github.io/main/data/rdc_version.txt",
+    syncMeta: "https://raw.githubusercontent.com/ixservices-bit/ixservices.github.io/main/data/sync-meta.txt"
   },
   fetchTimeoutMs: 12000,
   recentWindowDays: 7

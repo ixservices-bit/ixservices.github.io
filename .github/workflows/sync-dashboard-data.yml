@@ -3,8 +3,8 @@ name: Sync dashboard data
 on:
   workflow_dispatch:
   schedule:
-    # Avoid the top/bottom of the hour, where GitHub's scheduler is busiest.
-    - cron: "13,43 * * * *"
+    # GitHub schedules are best-effort; poll more often so delayed runs still land sooner.
+    - cron: "*/10 * * * *"
 
 permissions:
   contents: write
@@ -83,6 +83,7 @@ jobs:
           download update icqa_version.txt data/icqa_version.txt "${UPDATE_TOKEN}"
           download update rdc_version.txt data/rdc_version.txt "${UPDATE_TOKEN}"
           download customize usersettings/customization_usage.csv data/customization_usage.csv "${CUSTOMIZE_TOKEN}"
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > data/sync-meta.txt
 
       - name: Commit synced data
         run: |

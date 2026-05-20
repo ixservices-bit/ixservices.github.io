@@ -18,6 +18,7 @@
     refresh: document.getElementById("refreshBtn"),
     status: document.getElementById("statusLine"),
     content: document.getElementById("content"),
+    syncStamp: document.getElementById("syncStamp"),
     ranges: document.getElementById("rangeTabs"),
     tabs: document.getElementById("viewTabs"),
     build: document.getElementById("buildFilter"),
@@ -111,6 +112,24 @@
       { build: "ICQA", version: clean(state.raw.icqaVersion) },
       { build: "RDC", version: clean(state.raw.rdcVersion) }
     ];
+    updateSyncStamp();
+  }
+
+  function updateSyncStamp() {
+    if (!el.syncStamp) return;
+
+    const syncText = clean(state.raw.syncMeta);
+    const syncDate = dateValue(syncText);
+    const newestDataDate = maxDate(state.rows.feature || [], "date");
+
+    if (syncDate) {
+      const age = ageText(syncDate);
+      el.syncStamp.textContent = `Last auto sync: ${fmtDate(syncDate)}${age ? ` (${age})` : ""}`;
+    } else if (newestDataDate) {
+      el.syncStamp.textContent = `Latest CSV row: ${fmtDate(newestDataDate)}`;
+    } else {
+      el.syncStamp.textContent = "Last auto sync: unavailable";
+    }
   }
 
   function filteredFeature() {
@@ -467,6 +486,17 @@
   function eq(a, b) { return clean(a).toLowerCase() === clean(b).toLowerCase(); }
   function dateValue(v) { const d = new Date(clean(v).replace(" ", "T")); return Number.isNaN(d.getTime()) ? new Date("") : d; }
   function fmtDate(d) { return d instanceof Date && !Number.isNaN(d.getTime()) ? d.toLocaleString() : ""; }
+  function ageText(d) {
+    if (!(d instanceof Date) || Number.isNaN(d.getTime())) return "";
+    const minutes = Math.max(0, Math.round((Date.now() - d.getTime()) / 60000));
+    if (minutes < 1) return "just now";
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    const rem = minutes % 60;
+    if (hours < 24) return `${hours}h${rem ? ` ${rem}m` : ""} ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
+  }
   function shortDate(d) {
     if (!(d instanceof Date) || Number.isNaN(d.getTime())) return "";
     const h = d.getHours();
