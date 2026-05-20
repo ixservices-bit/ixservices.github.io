@@ -3,7 +3,8 @@ name: Sync dashboard data
 on:
   workflow_dispatch:
   schedule:
-    - cron: "*/30 * * * *"
+    # Avoid the top/bottom of the hour, where GitHub's scheduler is busiest.
+    - cron: "13,43 * * * *"
 
 permissions:
   contents: write
