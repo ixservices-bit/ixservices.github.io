@@ -26,7 +26,6 @@ TREX,https://transportation.homedepot.com/trex/,
 Vector,https://app.withvector.com/activity,
 WMS,https://rdc{DC}wms.homedepot.com:30001,RDC
 WorkBench,https://workbench.homedepot.com/,
-Workday,wd5.myworkday.com/homedepot/d/home.htmld,RDC
 Zendesk,https://depotsupport.zendesk.com/hc/en-us/articles/360041288092-RDC-VOC-Forms,
 ICQA Reports,https://tableau-scm.homedepot.com/#/views/ICQAReportingSuite/RDCICQAReports?:iid=2,
 Home Depot,homedepot.com,RDC
