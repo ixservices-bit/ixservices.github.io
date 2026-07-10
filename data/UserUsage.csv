@@ -1,4 +1,5 @@
 Username,Machine,Build,Status,LastHeartbeat,AssemblyVersion
 svcLFWarehouse1,L508470EFC61D9,RDC,Active,2026-07-10 14:14:31,2.1.4.56
-svcLFWarehouse1,L508483A5E67EF,RDC,Active,2026-07-10 14:17:59,2.1.4.56
+svcLFWarehouse1,L508483A5E67EF,RDC,Inactive,2026-07-10 16:06:37,2.1.4.56
 svcLFWarehouse1,L508470EFC977B,RDC,Active,2026-07-10 14:36:35,2.1.4.56
+svcLFWarehouse1,L5084B6D442313,RDC,Active,2026-07-10 15:28:53,2.1.4.56
