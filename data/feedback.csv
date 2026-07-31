@@ -1,4 +1,5 @@
 Id,SubmittedAt,DisplayName,Email,Category,Message,Username,Machine,Build,Status,StatusUpdatedAt,StatusUpdatedBy
+20260731143323043-7bed6f91,2026-07-31 14:33:23,G,,Bug Issue,"""Hide widget"" also hides all active windows.",GBS6J8,L508460CA84665,ICQA,Acknowledged,2026-07-31 14:55:20,GBS6J8
 20260725175900993-4e4d33da,2026-07-25 17:59:00,broke,naw,Bug Issue,computer wont update to the new rdc resources. Near dd147,svcLFWarehouse1,L5084B6D8EA959,RDC,Acknowledged,2026-07-30 19:32:04,Fusion Octane
 20260712170048769-0df97455,2026-07-12 17:00:48,Brandon W,,Bug Issue,Widget randomly glitches and moves position of where its at,bxw1389,L508460CA3A4B4,ICQA,Acknowledged,2026-07-12 17:02:10,bxw1389
 20260628161813210-f0e4f27a,2026-06-28 16:18:13,Brandon,Brandon_s_winkle@homedepot.com,Feature Request,Receiving Reports on app with auto sort,bxw1389,L5084B6D667DA9,ICQA,Acknowledged,2026-06-28 16:44:02,GBS6J8
