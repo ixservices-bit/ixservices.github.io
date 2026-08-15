@@ -15,7 +15,7 @@ Optimus,https://optimus.apps.homedepot.com,RDC
 Order Up,https://orders.apps.homedepot.com,
 Partner Profile,https://supplierhub.homedepot.com/,
 ROPE,https://rope.apps.homedepot.com,RDC
-ROPE 2.0,https://rope-client.service.homedepot.com/reporting?siteNumber={DC},RDC
+ROPE Reporting,https://rope-client.service.homedepot.com/reporting?siteNumber={DC},RDC
 RRF Report,https://tableau-scm.homedepot.com/#/workbooks/9632/views,
 RSA SSP,https://ssp.homedepot.com/,
 Smart Access,https://app.smartaccess.io/,RDC
