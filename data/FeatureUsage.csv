@@ -7658,3 +7658,4 @@ Timestamp,SessionId,Username,Machine,Build,FormName,ButtonName,OpenCount,ClickCo
 2026-08-15 18:25:39,85d7810c1630444f8a22cb5b853d1d2f,svcLFWarehouse1,L508460CA7C15F,RDC,BP LPNs / Lost Carts,,2,0,10
 2026-08-16 06:09:27,a5deed61d51142efad905ffd3a2406a7,svcLFWarehouse1,L508460CA7C15F,RDC,BP LPNs / Lost Carts,,2,0,48
 2026-08-16 06:10:38,31dbbda7e9994ba487d54f802647ef9a,svcLFWarehouse1,L508460CA7C15F,RDC,BP LPNs / Lost Carts,,2,0,30
+2026-08-16 06:40:30,b20fafcd45c84a6293980d21f508f47b,svcLFWarehouse1,L5084E43A01517,RDC,Door Lookup,,2,0,302
